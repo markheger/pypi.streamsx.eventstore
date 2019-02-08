@@ -1,7 +1,14 @@
+.project
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# streamsx files
+/**/job*.tar.gz
+/**/*tk*/
+/**/*tk*.zip
 
 # C extensions
 *.so
