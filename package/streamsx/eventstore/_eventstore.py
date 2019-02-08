@@ -12,25 +12,29 @@ from streamsx.spl.types import rstring
 def insert(stream, connection, database, table, user=None, password=None, config=None, batch_size=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
-    Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.    
+    Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
+
+    Creates the table if the table does not exist. Set the ``primary_key`` and/or ``partitioning_key`` in case the table needs to be created.
 
     Args:
-        stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input.
+        stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
         connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store.
         database(str): The name of the database, as defined in IBM Db2 Event Store.
         table(str): The name of the table into which you want to insert rows.
         user(str): Name of the IBM Db2 Event Store User in order to connect.
         password(str): Password for the IBM Db2 Event Store User in order to connect.
-        config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of user and password parameters. Supported properties in the application configuration are: eventStoreUser and eventStorePassword
+        config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of ``user`` and ``password`` parameters. Supported properties in the application configuration are: "eventStoreUser" and "eventStorePassword".
         batch_size(int): The number of rows that will be batched in the operator before the batch is inserted into IBM Db2 Event Store by using the batchInsertAsync method. If you do not specify this parameter, the batchSize defaults to the estimated number of rows that could fit into an 8K memory page.
-        max_num_active_batches(int) - The number of batches that can be filled and inserted asynchronously. The default is 1.        
-        partitioning_key(str): Partitioning key for the table. A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the sharding key for the IBM Db2 Event Store table. The attribute names are the names of the fields in the stream. The partitioning_key parameter is used only if the table does not yet exist in the IBM Db2 Event Store database. If you do not specify this parameter or if the key string is empty, the key defaults to making the first column in the stream as the shard key. For example, "col1, col2, col3"
-        primary_key(str): Primary key for the table.  A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the primary key for the IBM Db2 Event Store table. The attribute names are the names of the fields in the stream. The primary_key parameter is used only if the table does not yet exist in the IBM Db2 Event Store database. If you do not specify this parameter, the resulting table has an empty primary key.
+        max_num_active_batches(int): The number of batches that can be filled and inserted asynchronously. The default is 1.        
+        partitioning_key(str): Partitioning key for the table. A string of attribute names separated by commas. The partitioning_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
+        primary_key(str): Primary key for the table.  A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the primary key for the IBM Db2 Event Store table. The primary_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
         schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
         name(str): Sink name in the Streams context, defaults to a generated name.
 
     Returns:
-        Output Stream if schema parameter is specified. This output port is intended to output the information on whether a tuple was successful or not when it was inserted into the database.
+        streamsx.topology.topology.Sink: Stream termination
+        or
+        Output Stream if ``schema`` parameter is specified. This output port is intended to output the information on whether a tuple was successful or not when it was inserted into the database.
     """
 
 

@@ -38,21 +38,12 @@ class TestParams(unittest.TestCase):
         es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5)
 
 ##
-## Test assumptions
+## Test requirements
 ##
 ## toolkit path is given by STREAMS_EVENTSTORE_TOOLKIT environment var
 ## connection to event store is given by EVENTSTORE_CONNECTION environment var (IP address and port number needed to connect to IBM Db2 Event Store)
-## Expected database name is TESTDB and expected table name is ReviewTable
-## val reviewSchema = TableSchema("ReviewTable", 
-##       StructType(Array(
-##          StructField("userId", LongType, nullable = false),
-##          StructField("categoryId", IntegerType, nullable = false),
-##          StructField("productName", StringType, nullable = false),
-##          StructField("boolfield", BooleanType, nullable = false),
-##          StructField("boolfield2", BooleanType, nullable = true),
-##          StructField("duration", IntegerType, nullable = false ),
-##          StructField("review", StringType, nullable = false))),
-##        shardingColumns = Seq("userId"), pkColumns = Seq("userId"))
+##
+## Tables are created with the first tuple, if they do not exist in database.
 ##
 class TestDistributed(unittest.TestCase):
 
@@ -63,8 +54,8 @@ class TestDistributed(unittest.TestCase):
 
     def _create_stream(self, topo):
         s = topo.source([1,2,3,4,5,6])
-        schema=StreamSchema('tuple<int64 userId, int32 categoryId, rstring productName, boolean boolfield, boolean boolfield2, int32 duration, rstring review>').as_tuple()
-        return s.map(lambda x : (x,x*2,'Prod'+str(x*2),True,False,0,'x'), schema=schema)
+        schema=StreamSchema('tuple<int32 id, rstring name>').as_tuple()
+        return s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
 
     @unittest.skipIf(toolkit_env_var() == False or connection_env_var() == False, "Missing environment variable.")
     def test_insert(self):
@@ -75,7 +66,7 @@ class TestDistributed(unittest.TestCase):
         # use toolkit applied with STREAMS_EVENTSTORE_TOOLKIT env var
         streamsx.spl.toolkit.add_toolkit(topo, es_toolkit)
         s = self._create_stream(topo)
-        res = es.insert(s, es_connection, 'TESTDB', 'ReviewTable')
+        res = es.insert(s, es_connection, 'TESTDB', 'SampleTable', primary_key='id')
 
         tester = Tester(topo)
         tester.run_for(60)
@@ -104,7 +95,7 @@ class TestDistributed(unittest.TestCase):
         beacon.categoryId = beacon.output('(int32)IterationCount()')
         beacon.productName = beacon.output(spltypes.rstring('ProdValue'))
 
-        res = es.insert(beacon.stream, es_connection, 'TESTDB', 'ReviewTable', batch_size=1, schema=result_schema)
+        res = es.insert(beacon.stream, es_connection, 'TESTDB', 'ReviewTable', batch_size=1, primary_key='userId', schema=result_schema)
         res.print()
         tester = Tester(topo)
         tester.tuple_count(res, 3, exact=False)
