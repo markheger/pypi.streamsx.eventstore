@@ -50,7 +50,11 @@ class TestDistributed(unittest.TestCase):
 
     def setUp(self):
         Tester.setup_distributed(self)
-
+        # setup test config
+        self.test_config = {}
+        job_config = streamsx.topology.context.JobConfig(tracing='info')
+        job_config.add(self.test_config)
+        self.test_config[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
 
     def _create_stream(self, topo):
         s = topo.source([1,2,3,4,5,6])
@@ -71,13 +75,8 @@ class TestDistributed(unittest.TestCase):
         tester = Tester(topo)
         tester.run_for(60)
 
-        # setup test config
-        cfg = {}
-        job_config = streamsx.topology.context.JobConfig(tracing='info')
-        job_config.add(cfg)
-        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
         # Run the test 
-        tester.test(self.test_ctxtype, cfg, always_collect_logs=True)
+        tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
 
 
     @unittest.skipIf(toolkit_env_var() == False or connection_env_var() == False, "Missing environment variable.")
@@ -95,18 +94,13 @@ class TestDistributed(unittest.TestCase):
         beacon.categoryId = beacon.output('(int32)IterationCount()')
         beacon.productName = beacon.output(spltypes.rstring('ProdValue'))
 
-        res = es.insert(beacon.stream, es_connection, 'TESTDB', 'ReviewTable', batch_size=1, primary_key='userId', schema=result_schema)
+        res = es.insert(beacon.stream, es_connection, 'TESTDB', 'ReviewTable', batch_size=5, primary_key='userId', schema=result_schema)
         res.print()
         tester = Tester(topo)
         tester.tuple_count(res, 3, exact=False)
         tester.run_for(60)
 
-        # setup test config
-        cfg = {}
-        job_config = streamsx.topology.context.JobConfig(tracing='trace')
-        job_config.add(cfg)
-        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
         # Run the test 
-        tester.test(self.test_ctxtype, cfg, always_collect_logs=True)
+        tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
 
 

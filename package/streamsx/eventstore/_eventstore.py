@@ -7,6 +7,10 @@ import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema, StreamSchema
 from streamsx.spl.types import rstring
 
+def _add_toolkit_dependency(topo):
+    # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
+    # This is important when toolkit is not set with streamsx.spl.toolkit.add_toolkit (selecting toolkit from remote build service)
+    streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[0.1.0,1.0.0)')
 
     
 def insert(stream, connection, database, table, user=None, password=None, config=None, batch_size=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
@@ -37,6 +41,8 @@ def insert(stream, connection, database, table, user=None, password=None, config
         Output Stream if ``schema`` parameter is specified. This output port is intended to output the information on whether a tuple was successful or not when it was inserted into the database.
     """
 
+    # python wrapper eventstore toolkit dependency
+    _add_toolkit_dependency(stream.topology)
 
     _op = _EventStoreSink(stream, schema, connectionString=connection, databaseName=database, tableName=table, partitioningKey=partitioning_key, primaryKey=primary_key, name=name)
 
