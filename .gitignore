@@ -9,6 +9,7 @@ __pycache__/
 /**/job*.tar.gz
 /**/*tk*/
 /**/*tk*.zip
+/package/*.sab
 
 # C extensions
 *.so

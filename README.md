@@ -18,6 +18,11 @@ Documentation is using Sphinx and can be built locally using:
 cd package/docs
 make html
 ```
+
+or
+
+    ant doc
+
 and viewed using
 ```
 firefox package/docs/build/html/index.html
@@ -48,7 +53,18 @@ When the documented sample must be changed, change it here:
 
 Package can be tested with TopologyTester using a Streams instance and Db2 Event Store database.
 
+* toolkit path is given by `STREAMS_EVENTSTORE_TOOLKIT` environment variable
+* connection to event store is given by `EVENTSTORE_CONNECTION` environment variable (IP address and port number needed to connect to IBM Db2 Event Store)
+
+
 ```
 cd package
 python3 -u -m unittest streamsx.eventstore.tests.test_eventstore.TestDistributed
 ```
+
+or 
+
+    ant test
+
+
+

@@ -7,9 +7,6 @@ IBM Db2 Event Store is an in-memory database designed to rapidly ingest and anal
 
 This package exposes the `com.ibm.streamsx.eventstore` toolkit as Python methods.
 
-* `IBM Streaming Analytics <https://www.ibm.com/cloud/streaming-analytics>`_
-* `IBM Db2 Event Store <https://www.ibm.com/products/db2-event-store>`_
-
 Sample
 ======
 
