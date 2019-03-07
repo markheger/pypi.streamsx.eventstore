@@ -53,7 +53,7 @@ When the documented sample must be changed, change it here:
 
 Package can be tested with TopologyTester using a Streams instance and Db2 Event Store database.
 
-* toolkit path is given by `STREAMS_EVENTSTORE_TOOLKIT` environment variable
+* toolkit path is given by `STREAMSX_EVENTSTORE_TOOLKIT` environment variable
 * connection to event store is given by `EVENTSTORE_CONNECTION` environment variable (IP address and port number needed to connect to IBM Db2 Event Store)
 
 
