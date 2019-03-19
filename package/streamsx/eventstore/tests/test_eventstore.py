@@ -16,7 +16,7 @@ import os
 def toolkit_env_var():
     result = True
     try:
-        os.environ['STREAMS_EVENTSTORE_TOOLKIT']
+        os.environ['STREAMSX_EVENTSTORE_TOOLKIT']
     except KeyError: 
         result = False
     return result
@@ -36,11 +36,12 @@ class TestParams(unittest.TestCase):
         s = topo.source(['Hello World']).as_string()
         es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table')
         es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5)
+        es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5, front_end_connection_flag=True)
 
 ##
 ## Test requirements
 ##
-## toolkit path is given by STREAMS_EVENTSTORE_TOOLKIT environment var
+## toolkit path is given by STREAMSX_EVENTSTORE_TOOLKIT environment var
 ## connection to event store is given by EVENTSTORE_CONNECTION environment var (IP address and port number needed to connect to IBM Db2 Event Store)
 ##
 ## Tables are created with the first tuple, if they do not exist in database.
@@ -61,13 +62,12 @@ class TestDistributed(unittest.TestCase):
         schema=StreamSchema('tuple<int32 id, rstring name>').as_tuple()
         return s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
 
-    @unittest.skipIf(toolkit_env_var() == False or connection_env_var() == False, "Missing environment variable.")
     def test_insert(self):
-        es_toolkit = os.environ['STREAMS_EVENTSTORE_TOOLKIT']
+        es_toolkit = os.environ['STREAMSX_EVENTSTORE_TOOLKIT']
         es_connection = os.environ['EVENTSTORE_CONNECTION']
 
         topo = Topology('test_insert_with_result')
-        # use toolkit applied with STREAMS_EVENTSTORE_TOOLKIT env var
+        # use toolkit applied with STREAMSX_EVENTSTORE_TOOLKIT env var
         streamsx.spl.toolkit.add_toolkit(topo, es_toolkit)
         s = self._create_stream(topo)
         res = es.insert(s, es_connection, 'TESTDB', 'SampleTable', primary_key='id')
@@ -79,12 +79,11 @@ class TestDistributed(unittest.TestCase):
         tester.test(self.test_ctxtype, self.test_config, always_collect_logs=True)
 
 
-    @unittest.skipIf(toolkit_env_var() == False or connection_env_var() == False, "Missing environment variable.")
     def test_insert_with_result(self):
-        es_toolkit = os.environ['STREAMS_EVENTSTORE_TOOLKIT']
+        es_toolkit = os.environ['STREAMSX_EVENTSTORE_TOOLKIT']
         es_connection = os.environ['EVENTSTORE_CONNECTION']
         topo = Topology('test_insert_with_result')
-        # use toolkit applied with STREAMS_EVENTSTORE_TOOLKIT env var
+        # use toolkit applied with STREAMSX_EVENTSTORE_TOOLKIT env var
         streamsx.spl.toolkit.add_toolkit(topo, es_toolkit)
         result_schema = StreamSchema('tuple<int64 userId, int32 categoryId, rstring productName, boolean boolfield, boolean boolfield2, int32 duration, rstring review, boolean _Inserted_>')
         beacon = op.Source(topo, "spl.utility::Beacon",
