@@ -36,6 +36,7 @@ class TestParams(unittest.TestCase):
         s = topo.source(['Hello World']).as_string()
         es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table')
         es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5)
+        es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5, front_end_connection_flag=True)
 
 ##
 ## Test requirements

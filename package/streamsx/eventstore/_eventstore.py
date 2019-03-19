@@ -10,10 +10,10 @@ from streamsx.spl.types import rstring
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
     # This is important when toolkit is not set with streamsx.spl.toolkit.add_toolkit (selecting toolkit from remote build service)
-    streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[0.1.0,1.0.0)')
+    streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[0.1.0,2.0.0)')
 
     
-def insert(stream, connection, database, table, user=None, password=None, config=None, batch_size=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
+def insert(stream, connection, database, table, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
@@ -29,6 +29,7 @@ def insert(stream, connection, database, table, user=None, password=None, config
         password(str): Password for the IBM Db2 Event Store User in order to connect.
         config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of ``user`` and ``password`` parameters. Supported properties in the application configuration are: "eventStoreUser" and "eventStorePassword".
         batch_size(int): The number of rows that will be batched in the operator before the batch is inserted into IBM Db2 Event Store by using the batchInsertAsync method. If you do not specify this parameter, the batchSize defaults to the estimated number of rows that could fit into an 8K memory page.
+        front_end_connection_flag(bool): Set to ``True`` to connect through a Secure Gateway (for Event Store Enterprise Edition version >= 1.1.2 and Developer Edition version > 1.1.4)
         max_num_active_batches(int): The number of batches that can be filled and inserted asynchronously. The default is 1.        
         partitioning_key(str): Partitioning key for the table. A string of attribute names separated by commas. The partitioning_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
         primary_key(str): Primary key for the table.  A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the primary key for the IBM Db2 Event Store table. The primary_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
@@ -45,7 +46,9 @@ def insert(stream, connection, database, table, user=None, password=None, config
     _add_toolkit_dependency(stream.topology)
 
     _op = _EventStoreSink(stream, schema, connectionString=connection, databaseName=database, tableName=table, partitioningKey=partitioning_key, primaryKey=primary_key, name=name)
-
+    if front_end_connection_flag is not None:
+        if front_end_connection_flag is True:
+            _op.params['frontEndConnectionFlag'] = _op.expression('true')
     if batch_size is not None:
         _op.params['batchSize'] = streamsx.spl.types.int32(batch_size)
     if max_num_active_batches is not None:
