@@ -10,10 +10,10 @@ from streamsx.spl.types import rstring
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
     # This is important when toolkit is not set with streamsx.spl.toolkit.add_toolkit (selecting toolkit from remote build service)
-    streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[0.1.0,2.0.0)')
+    streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[2.0.0,3.0.0)')
 
     
-def insert(stream, connection, database, table, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
+def insert(stream, connection, database, table, schema_name=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
@@ -25,6 +25,7 @@ def insert(stream, connection, database, table, user=None, password=None, config
         connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store.
         database(str): The name of the database, as defined in IBM Db2 Event Store.
         table(str): The name of the table into which you want to insert rows.
+        schema_name(str): The name of the table schema name of the table into which to insert data.
         user(str): Name of the IBM Db2 Event Store User in order to connect.
         password(str): Password for the IBM Db2 Event Store User in order to connect.
         config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of ``user`` and ``password`` parameters. Supported properties in the application configuration are: "eventStoreUser" and "eventStorePassword".
@@ -45,7 +46,7 @@ def insert(stream, connection, database, table, user=None, password=None, config
     # python wrapper eventstore toolkit dependency
     _add_toolkit_dependency(stream.topology)
 
-    _op = _EventStoreSink(stream, schema, connectionString=connection, databaseName=database, tableName=table, partitioningKey=partitioning_key, primaryKey=primary_key, name=name)
+    _op = _EventStoreSink(stream, schema, connectionString=connection, databaseName=database, tableName=table, schemaName=schema_name, partitioningKey=partitioning_key, primaryKey=primary_key, name=name)
     if front_end_connection_flag is not None:
         if front_end_connection_flag is True:
             _op.params['frontEndConnectionFlag'] = _op.expression('true')
@@ -69,7 +70,7 @@ def insert(stream, connection, database, table, user=None, password=None, config
 
 
 class _EventStoreSink(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema, connectionString, databaseName, tableName, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, vmArg=None, name=None):
+    def __init__(self, stream, schema, connectionString, databaseName, tableName, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, vmArg=None, name=None):
         topology = stream.topology
         kind="com.ibm.streamsx.eventstore::EventStoreSink"
         inputs=stream
@@ -83,6 +84,8 @@ class _EventStoreSink(streamsx.spl.op.Invoke):
             params['databaseName'] = databaseName
         if tableName is not None:
             params['tableName'] = tableName
+        if schemaName is not None:
+            params['schemaName'] = schemaName
         if batchSize is not None:
             params['batchSize'] = batchSize
         if configObject is not None:
