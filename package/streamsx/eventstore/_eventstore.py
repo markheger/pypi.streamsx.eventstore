@@ -12,23 +12,84 @@ def _add_toolkit_dependency(topo):
     # This is important when toolkit is not set with streamsx.spl.toolkit.add_toolkit (selecting toolkit from remote build service)
     streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[2.0.0,3.0.0)')
 
+
+def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None):
+    """Configures IBM Streams for a connection to IBM Db2 Event Store database.
+
+    Creates an application configuration object containing the required properties with connection information.
+
+    Example for creating a configuration for a Streams instance with connection details::
+
+        from streamsx.rest import Instance
+        import streamsx.topology.context
+        from icpd_core import icpd_util
+        
+        cfg=icpd_util.get_service_instance_details(name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service(cfg)
+        app_cfg = configure_connection(instance, database='TESTDB', connection='HostIP:Port1;HostIP:Port2', user='db2-user', password='db2-password')
+
+    Args:
+        instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
+        name(str): Name of the application configuration
+        database(str): The name of the database, as defined in IBM Db2 Event Store.
+        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store.
+        user(str): Name of the IBM Db2 Event Store User in order to connect.
+        password(str): Password for the IBM Db2 Event Store User in order to connect.
+
+    Returns:
+        Name of the application configuration.
+    """
+
+    # Prepare operator (toolkit) specific properties for application configuration
+    description = 'Config for Db2 Event Store connection ' + name
+    properties = {}
+    if database is not None:
+        properties['databaseName']=database
+    if connection is not None:
+        properties['connectionString']=connection
+    if user is not None:
+        properties['eventStoreUser']=user
+    if password is not None:
+        properties['eventStorePassword']=password
     
-def insert(stream, connection, database, table, schema_name=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
+    # check if application configuration exists
+    app_config = instance.get_application_configurations(name=name)
+    if app_config:
+        print ('update application configuration: '+name)
+        app_config[0].update(properties)
+    else:
+        print ('create application configuration: '+name)
+        instance.create_application_configuration(name, properties, description)
+    return name
+
+
+def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
 
     Creates the table if the table does not exist. Set the ``primary_key`` and/or ``partitioning_key`` in case the table needs to be created.
 
+    Example of a Streams application inserting rows to a table in a Db2 Event Store database::
+        # provide connection endpoint information
+        es_connection = 'HostIP:Port1;HostIP:Port2'
+        # generate sample tuples with the schema of the target table
+        s = topo.source([1,2,3,4,5,6,7,8,9])
+        schema=StreamSchema('tuple<int32 id, rstring name>').as_tuple()
+        s = s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
+        # insert tuple data into table as rows
+        res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id')
+
     Args:
         stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
-        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store.
-        database(str): The name of the database, as defined in IBM Db2 Event Store.
         table(str): The name of the table into which you want to insert rows.
         schema_name(str): The name of the table schema name of the table into which to insert data.
-        user(str): Name of the IBM Db2 Event Store User in order to connect.
-        password(str): Password for the IBM Db2 Event Store User in order to connect.
-        config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of ``user`` and ``password`` parameters. Supported properties in the application configuration are: "eventStoreUser" and "eventStorePassword".
+        database(str): The name of the database, as defined in IBM Db2 Event Store. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
+        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
+        user(str): Name of the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
+        password(str): Password for the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
+        config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of ``database``, ``connection``, ``user`` and ``password`` parameters. Supported properties in the application configuration are: "connectionString", "databaseName", "eventStoreUser" and "eventStorePassword".
         batch_size(int): The number of rows that will be batched in the operator before the batch is inserted into IBM Db2 Event Store by using the batchInsertAsync method. If you do not specify this parameter, the batchSize defaults to the estimated number of rows that could fit into an 8K memory page.
         front_end_connection_flag(bool): Set to ``True`` to connect through a Secure Gateway (for Event Store Enterprise Edition version >= 1.1.2 and Developer Edition version > 1.1.4)
         max_num_active_batches(int): The number of batches that can be filled and inserted asynchronously. The default is 1.        
@@ -42,6 +103,11 @@ def insert(stream, connection, database, table, schema_name=None, user=None, pas
         or
         Output Stream if ``schema`` parameter is specified. This output port is intended to output the information on whether a tuple was successful or not when it was inserted into the database.
     """
+
+    if config is None and connection is None:
+         raise ValueError("Either config parameter or connection must be set.")
+    if config is None and database is None:
+         raise ValueError("Either config parameter or database must be set.")
 
     # python wrapper eventstore toolkit dependency
     _add_toolkit_dependency(stream.topology)
@@ -70,7 +136,7 @@ def insert(stream, connection, database, table, schema_name=None, user=None, pas
 
 
 class _EventStoreSink(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema, connectionString, databaseName, tableName, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, vmArg=None, name=None):
+    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, vmArg=None, name=None):
         topology = stream.topology
         kind="com.ibm.streamsx.eventstore::EventStoreSink"
         inputs=stream
