@@ -19,9 +19,9 @@ class TestParams(unittest.TestCase):
     def test_param(self):
         topo = Topology()
         s = topo.source(['Hello World']).as_string()
-        es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table')
-        es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5)
-        es.insert(s, '9.26.150.75:1101', 'sample_db', 'sample_table', batch_size=100, max_num_active_batches=5, front_end_connection_flag=True)
+        es.insert(s, connection='9.26.150.75:1101', database='sample_db', table='sample_table')
+        es.insert(s, connection='9.26.150.75:1101', database='sample_db', table='sample_table', batch_size=100, max_num_active_batches=5)
+        es.insert(s, connection='9.26.150.75:1101', database='sample_db', table='sample_table', batch_size=100, max_num_active_batches=5, front_end_connection_flag=True)
 
 ##
 ## Test requirements
@@ -64,7 +64,7 @@ class TestDistributed(unittest.TestCase):
         topo = Topology('test_insert_with_result')
         streamsx.spl.toolkit.add_toolkit(topo, self.es_toolkit)
         s = self._create_stream(topo)
-        res = es.insert(s, self.connection, self.database, 'SampleTable', primary_key='id', front_end_connection_flag=True, user=self.es_user, password=self.es_password)      
+        res = es.insert(s, connection=self.connection, database=self.database, table='SampleTable', primary_key='id', front_end_connection_flag=True, user=self.es_user, password=self.es_password)      
 
         tester = Tester(topo)
         tester.run_for(120)
@@ -84,7 +84,7 @@ class TestDistributed(unittest.TestCase):
         beacon.categoryId = beacon.output('(int32)IterationCount()')
         beacon.productName = beacon.output(spltypes.rstring('ProdValue'))
 
-        res = es.insert(beacon.stream, self.connection, self.database, 'ReviewTable', batch_size=5, primary_key='userId', schema=result_schema, front_end_connection_flag=True, user=self.es_user, password=self.es_password)
+        res = es.insert(beacon.stream, connection=self.connection, database=self.database, table='ReviewTable', batch_size=5, primary_key='userId', schema=result_schema, front_end_connection_flag=True, user=self.es_user, password=self.es_password)
         res.print()
         tester = Tester(topo)
         tester.tuple_count(res, 3, exact=False)
