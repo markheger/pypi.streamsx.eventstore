@@ -6,12 +6,17 @@ import streamsx.spl.op
 import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema, StreamSchema
 from streamsx.spl.types import rstring
+import os
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
     # This is important when toolkit is not set with streamsx.spl.toolkit.add_toolkit (selecting toolkit from remote build service)
     streamsx.spl.toolkit.add_toolkit_dependency(topo, 'com.ibm.streamsx.eventstore', '[2.0.0,3.0.0)')
 
+def _add_store_file(topology, path):
+    filename = os.path.basename(path)
+    topology.add_file_dependency(path, 'opt')
+    return 'opt/'+filename
 
 def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None):
     """Configures IBM Streams for a connection to IBM Db2 Event Store database.
@@ -64,7 +69,7 @@ def configure_connection(instance, name='eventstore', database=None, connection=
     return name
 
 
-def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, schema=None, name=None):
+def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, ssl_connection=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
@@ -72,7 +77,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
     Creates the table if the table does not exist. Set the ``primary_key`` and/or ``partitioning_key`` in case the table needs to be created.
 
     Example of a Streams application inserting rows to a table in a Db2 Event Store database::
-        # provide connection endpoint information
+        # provide connection endpoint information in format <HostIP:Port from JDBC URL>;<SCALA connection URL>
         es_connection = 'HostIP:Port1;HostIP:Port2'
         # generate sample tuples with the schema of the target table
         s = topo.source([1,2,3,4,5,6,7,8,9])
@@ -121,6 +126,21 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
     if max_num_active_batches is not None:
         _op.params['maxNumActiveBatches'] = streamsx.spl.types.int32(max_num_active_batches)
 
+    if ssl_connection is not None:
+        if ssl_connection:
+            _op.params['sslConnection'] = _op.expression('true')            
+    if keystore is not None:
+        _op.params['keyStore'] = _add_store_file(stream.topology, keystore)
+    if keystore_password is not None:
+        _op.params['keyStorePassword'] = keystore_password
+    if plugin_name is not None:
+        _op.params['pluginFlag'] = _op.expression('true')
+        _op.params['pluginName'] = plugin_name
+    if truststore is not None:
+        _op.params['trustStore'] = _add_store_file(stream.topology, truststore)
+    if truststore_password is not None:
+        _op.params['trustStorePassword'] = truststore_password
+
     if config is not None:
         _op.params['configObject'] = config
     else:
@@ -136,7 +156,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
 
 
 class _EventStoreSink(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, vmArg=None, name=None):
+    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, keyStore=None, keyStorePassword=None, pluginFlag=None, pluginName=None, sslConnection=None, trustStore=None, trustStorePassword=None, vmArg=None, name=None):
         topology = stream.topology
         kind="com.ibm.streamsx.eventstore::EventStoreSink"
         inputs=stream
@@ -172,6 +192,20 @@ class _EventStoreSink(streamsx.spl.op.Invoke):
             params['preserveOrder'] = preserveOrder
         if primaryKey is not None:
             params['primaryKey'] = primaryKey
+        if keyStore is not None:
+            params['keyStore'] = keyStore
+        if keyStorePassword is not None:
+            params['keyStorePassword'] = keyStorePassword
+        if pluginFlag is not None:
+            params['pluginFlag'] = pluginFlag
+        if pluginName is not None:
+            params['pluginName'] = pluginName
+        if sslConnection is not None:
+            params['sslConnection'] = sslConnection
+        if trustStore is not None:
+            params['trustStore'] = trustStore
+        if trustStorePassword is not None:
+            params['trustStorePassword'] = trustStorePassword
 
         super(_EventStoreSink, self).__init__(topology,kind,inputs,schema,params,name)
 

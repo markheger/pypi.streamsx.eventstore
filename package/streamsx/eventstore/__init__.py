@@ -25,7 +25,7 @@ a table in a Db2 Event Store database::
 
     topo = Topology('EventStoreSample')
    
-    # provide connection endpoint information
+    # provide connection endpoint information in format <HostIP:Port from JDBC URL>;<SCALA connection URL>
     es_connection = 'HostIP:Port1;HostIP:Port2'
 
     # generate sample tuples with the schema of the target table
