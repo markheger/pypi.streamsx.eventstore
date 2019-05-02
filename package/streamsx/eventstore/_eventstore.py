@@ -18,7 +18,7 @@ def _add_store_file(topology, path):
     topology.add_file_dependency(path, 'opt')
     return 'opt/'+filename
 
-def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None):
+def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None):
     """Configures IBM Streams for a connection to IBM Db2 Event Store database.
 
     Creates an application configuration object containing the required properties with connection information.
@@ -41,6 +41,8 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store.
         user(str): Name of the IBM Db2 Event Store User in order to connect.
         password(str): Password for the IBM Db2 Event Store User in order to connect.
+        keystore_password(str): Password for key store file.
+        truststore_password(str): Password for trust store file.
 
     Returns:
         Name of the application configuration.
@@ -57,6 +59,10 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         properties['eventStoreUser']=user
     if password is not None:
         properties['eventStorePassword']=password
+    if keystore_password is not None:
+        properties['keyStorePassword']=keystore_password
+    if truststore_password is not None:
+        properties['trustStorePassword']=truststore_password
     
     # check if application configuration exists
     app_config = instance.get_application_configurations(name=name)
