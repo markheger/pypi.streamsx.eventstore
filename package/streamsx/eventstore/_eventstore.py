@@ -38,7 +38,7 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
         name(str): Name of the application configuration
         database(str): The name of the database, as defined in IBM Db2 Event Store.
-        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store.
+        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store, format: <HostIP:Port from JDBC URL>;<SCALA connection URL>
         user(str): Name of the IBM Db2 Event Store User in order to connect.
         password(str): Password for the IBM Db2 Event Store User in order to connect.
         keystore_password(str): Password for key store file.
@@ -75,7 +75,7 @@ def configure_connection(instance, name='eventstore', database=None, connection=
     return name
 
 
-def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, ssl_connection=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, schema=None, name=None):
+def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
@@ -96,16 +96,21 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
         table(str): The name of the table into which you want to insert rows.
         schema_name(str): The name of the table schema name of the table into which to insert data.
-        database(str): The name of the database, as defined in IBM Db2 Event Store. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
-        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
-        user(str): Name of the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
-        password(str): Password for the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set in application configuration (``config`` parameter has to be specified).
-        config(str): The name of the application configuration. If you specify parameter values in the configuration object, they override the values of ``database``, ``connection``, ``user`` and ``password`` parameters. Supported properties in the application configuration are: "connectionString", "databaseName", "eventStoreUser" and "eventStorePassword".
+        database(str): The name of the database, as defined in IBM Db2 Event Store. Alternative this parameter can be set with function ``configure_connection()``.
+        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store. Alternative this parameter can be set with function ``configure_connection()``.
+        user(str): Name of the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function ``configure_connection()``.
+        password(str): Password for the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function ``configure_connection()``.
+        config(str): The name of the application configuration. Value returned by the function ``configure_connection()``.
         batch_size(int): The number of rows that will be batched in the operator before the batch is inserted into IBM Db2 Event Store by using the batchInsertAsync method. If you do not specify this parameter, the batchSize defaults to the estimated number of rows that could fit into an 8K memory page.
         front_end_connection_flag(bool): Set to ``True`` to connect through a Secure Gateway (for Event Store Enterprise Edition version >= 1.1.2 and Developer Edition version > 1.1.4)
         max_num_active_batches(int): The number of batches that can be filled and inserted asynchronously. The default is 1.        
         partitioning_key(str): Partitioning key for the table. A string of attribute names separated by commas. The partitioning_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
         primary_key(str): Primary key for the table.  A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the primary key for the IBM Db2 Event Store table. The primary_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
+        truststore(str): Path to the trust store file for the SSL connection.
+        truststore_password(str): Password for the trust store file given by the truststore parameter. Alternative this parameter can be set with function ``configure_connection()``.
+        keystore(str): Path to the key store file for the SSL connection.
+        keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function ``configure_connection()``.
+        plugin_name(str): The plug-in name for the SSL connection. The default value is IBMPrivateCloudAuth.      
         schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
         name(str): Sink name in the Streams context, defaults to a generated name.
 
@@ -131,10 +136,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         _op.params['batchSize'] = streamsx.spl.types.int32(batch_size)
     if max_num_active_batches is not None:
         _op.params['maxNumActiveBatches'] = streamsx.spl.types.int32(max_num_active_batches)
-
-    if ssl_connection is not None:
-        if ssl_connection:
-            _op.params['sslConnection'] = _op.expression('true')            
+          
     if keystore is not None:
         _op.params['keyStore'] = _add_store_file(stream.topology, keystore)
     if keystore_password is not None:
