@@ -7,6 +7,11 @@ IBM Db2 Event Store is an in-memory database designed to rapidly ingest and anal
 
 This package exposes the `com.ibm.streamsx.eventstore` toolkit as Python methods.
 
+Supported versions:
+
+* Db2 Event Store 1.x: streamsx.eventstore version 1.x
+* Db2 Event Store 2.x: streamsx.eventstore version 2.x
+
 Sample
 ======
 
@@ -22,11 +27,8 @@ a table in a Db2 Event Store database::
 
     topo = Topology('EventStoreSample')
    
-    # add event store toolkit corresponding to your Event Store installation (developer/enterprise edition) and version
-    streamsx.spl.toolkit.add_toolkit(topo, 'PATH_TO_STREAMSX_EVENTSTORE_TOOLKIT_LOCATION')
-
     # provide connection endpoint information
-    es_connection = 'HostIP:Port'
+    es_connection = 'HostIP:Port1;HostIP:Port2'
 
     # generate sample tuples with the schema of the target table
     s = topo.source([1,2,3,4,5,6,7,8,9])
