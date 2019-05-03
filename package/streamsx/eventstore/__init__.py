@@ -25,11 +25,8 @@ a table in a Db2 Event Store database::
 
     topo = Topology('EventStoreSample')
    
-    # add event store toolkit corresponding to your Event Store installation (developer/enterprise edition) and version
-    streamsx.spl.toolkit.add_toolkit(topo, 'PATH_TO_STREAMSX_EVENTSTORE_TOOLKIT_LOCATION')
-
-    # provide connection endpoint information
-    es_connection = 'HostIP:Port'
+    # provide connection endpoint information in format <HostIP:Port from JDBC URL>;<SCALA connection URL>
+    es_connection = 'HostIP:Port1;HostIP:Port2'
 
     # generate sample tuples with the schema of the target table
     s = topo.source([1,2,3,4,5,6,7,8,9])
@@ -37,14 +34,14 @@ a table in a Db2 Event Store database::
     s = s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
 
     # insert tuple data into table as rows
-    res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', primary_key='id')
+    res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id')
 
     submit (ContextTypes.DISTRIBUTED, topo)
     # The Streams job is kept running.
 
 """
 
-__version__='1.1.0'
+__version__='2.0.0'
 
-__all__ = ['insert']
-from streamsx.eventstore._eventstore import insert
+__all__ = ['insert', 'configure_connection']
+from streamsx.eventstore._eventstore import insert,configure_connection
