@@ -25,14 +25,15 @@ def configure_connection(instance, name='eventstore', database=None, connection=
 
     Example for creating a configuration for a Streams instance with connection details::
 
-        from streamsx.rest import Instance
-        import streamsx.topology.context
-        from icpd_core import icpd_util
-        
-        cfg=icpd_util.get_service_instance_details(name='your-streams-instance')
-        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
-        instance = Instance.of_service(cfg)
-        app_cfg = configure_connection(instance, database='TESTDB', connection='HostIP:Port1;HostIP:Port2', user='db2-user', password='db2-password')
+        from streamsx.rest import Instance
+        import streamsx.topology.context
+        from icpd_core import icpd_util
+        
+        cfg=icpd_util.get_service_instance_details(name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service(cfg)
+        app_cfg = configure_connection(instance, database='TESTDB', connection='HostIP:Port1;HostIP:Port2', user='db2-user', password='db2-password')
+
 
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
@@ -80,9 +81,10 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
 
-    Creates the table if the table does not exist. Set the ``primary_key`` and/or ``partitioning_key`` in case the table needs to be created.
+    Creates the table if the table does not exist. Set the ``primary_key`` and ``partitioning_key`` in case the table needs to be created.
 
     Example of a Streams application inserting rows to a table in a Db2 Event Store database::
+
         # provide connection endpoint information in format <HostIP:Port from JDBC URL>;<SCALA connection URL>
         es_connection = 'HostIP:Port1;HostIP:Port2'
         # generate sample tuples with the schema of the target table
@@ -90,7 +92,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         schema=StreamSchema('tuple<int32 id, rstring name>').as_tuple()
         s = s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
         # insert tuple data into table as rows
-        res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id')
+        res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id', partitioning_key='id')
 
     Args:
         stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
