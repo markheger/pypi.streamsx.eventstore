@@ -23,6 +23,21 @@ class TestParams(unittest.TestCase):
         es.insert(s, connection='9.26.150.75:1101', database='sample_db', table='sample_table', batch_size=100, max_num_active_batches=5)
         es.insert(s, connection='9.26.150.75:1101', database='sample_db', table='sample_table', batch_size=100, max_num_active_batches=5, front_end_connection_flag=True)
 
+
+    def test_update_toolkit(self):
+        topo = Topology()
+        url = None
+        # download event store toolkit from GitHub
+        eventstore_toolkit = es.download_toolkit(url)
+        # add event store toolkit to topology
+        streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
+
+    def test_get_service_details(self):
+        topo = Topology()
+        es_cfg = None
+        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = es.get_service_details(es_cfg)
+
+
 ##
 ## Test requirements
 ##

@@ -7,6 +7,12 @@ import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema, StreamSchema
 from streamsx.spl.types import rstring
 import os
+import getpass
+import wget
+from tempfile import gettempdir
+import shutil
+import tarfile
+
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -17,6 +23,73 @@ def _add_store_file(topology, path):
     filename = os.path.basename(path)
     topology.add_file_dependency(path, 'opt')
     return 'opt/'+filename
+
+
+def _download_tk(url, name):
+    targetdir=gettempdir() + '/' + name
+    tmpfile = gettempdir() + '/' + name + '.tgz'
+    if os.path.isdir(targetdir):
+        shutil.rmtree(targetdir)
+    if os.path.isfile(tmpfile):
+        os.remove(tmpfile)
+    wget.download(url, tmpfile)
+    print (tmpfile + ": " + str(os.stat(tmpfile)))
+    tar = tarfile.open(tmpfile, "r:gz")
+    tar.extractall(path=targetdir)
+    tar.close()
+    toolkit_path = targetdir + '/' + name
+    tkfile = toolkit_path + '/toolkit.xml'
+    if os.path.isfile(tkfile):
+        print (tkfile + ': ' + str(os.stat(tkfile)))
+    return toolkit_path
+
+
+def download_toolkit(url=None):
+    """Downloads the event store toolkit from GitHub.
+
+    Example for updating the Event Store toolkit::
+
+        # download event store toolkit from GitHub
+        eventstore_toolkit = es.update_toolkit(url=None)
+        # add event store toolkit to topology
+        streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
+
+   Returns:
+        eventstore toolkit location
+    """
+    if url is None:
+        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.0.1-Enterprise-v2/streamsx.eventstore.toolkits-2.0.1-20190503-1449.tgz'
+    eventstore_toolkit = _download_tk(url,'com.ibm.streamsx.eventstore')
+    return eventstore_toolkit
+
+
+def get_service_details(service_configuration):
+    """Retrieve connection information for Event Store service in ICP4D.
+
+    Example for retrieving Event Store service details::
+
+        from icpd_core import icpd_util
+        
+        eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
+        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg)
+
+   Returns:
+        database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
+    """
+
+    es_db=input("Event Store database name (for example EVENTDB):")
+    es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
+    es_user=input("Event Store user:")
+    es_password=getpass.getpass('Event Store password:')
+
+    es_truststore=input("Event Store truststore file location (for example '/user-home/_global_/eventstore/db2eventstore-1234567890/clientkeystore':")
+    es_truststore_password=getpass.getpass("Event Store truststore password:")
+    # Change the lines below, if keystore and truststore is not in the same file
+    es_keystore=es_truststore
+    es_keystore_password=es_truststore_password
+
+    return es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password
+
 
 def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None):
     """Configures IBM Streams for a connection to IBM Db2 Event Store database.
