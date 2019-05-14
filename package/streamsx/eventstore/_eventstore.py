@@ -7,6 +7,14 @@ import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema, StreamSchema
 from streamsx.spl.types import rstring
 import os
+import getpass
+import wget
+from tempfile import gettempdir
+import shutil
+import tarfile
+import requests
+import re
+
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -18,21 +26,104 @@ def _add_store_file(topology, path):
     topology.add_file_dependency(path, 'opt')
     return 'opt/'+filename
 
-def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None):
+
+def _download_tk(url, name):
+    targetdir=gettempdir() + '/' + name
+    tmpfile = gettempdir() + '/' + name + '.tgz'
+    if os.path.isdir(targetdir):
+        shutil.rmtree(targetdir)
+    if os.path.isfile(tmpfile):
+        os.remove(tmpfile)
+    wget.download(url, tmpfile)
+    #print (tmpfile + ": " + str(os.stat(tmpfile)))
+    tar = tarfile.open(tmpfile, "r:gz")
+    tar.extractall(path=targetdir)
+    tar.close()
+    toolkit_path = targetdir + '/' + name
+    tkfile = toolkit_path + '/toolkit.xml'
+    if os.path.isfile(tkfile):
+        f = open(tkfile, "r")
+        for x in f:
+            if 'toolkit name' in x:
+                version_dump = x.replace('requiredProductVersion="4.3.0.0"', '').lstrip()
+                print('\n'+version_dump)
+                break
+        f.close()
+    return toolkit_path
+
+
+def download_toolkit(url=None):
+    """Downloads the latest Event Store toolkit toolkit from GitHub.
+
+    Example for updating the Event Store toolkit with latest toolkit from GitHub::
+
+        # download event store toolkit from GitHub
+        eventstore_toolkit = es.update_toolkit()
+        # add event store toolkit to topology
+        streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
+
+   Returns:
+        eventstore toolkit location
+    """
+    if url is None:
+        # get latest toolkit
+        r = requests.get('https://github.com/IBMStreams/streamsx.eventstore/releases/latest')
+        r.raise_for_status()
+        if r.text is not None:
+            s = re.search(r'/IBMStreams/streamsx.eventstore/releases/download/.*tgz', r.text).group()
+            url = 'https://github.com/' + s
+    if url is not None:
+        print('Download: ' + url)
+        eventstore_toolkit = _download_tk(url,'com.ibm.streamsx.eventstore')
+    else:
+        raise ValueError("Invalid URL")
+    return eventstore_toolkit
+
+
+def get_service_details(service_configuration):
+    """Retrieve connection information for Event Store service in ICP4D.
+
+    Example for retrieving Event Store service details::
+
+        from icpd_core import icpd_util
+        
+        eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
+        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg)
+
+   Returns:
+        database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
+    """
+
+    es_db=input("Event Store database name (for example EVENTDB):")
+    es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
+    es_user=input("Event Store user:")
+    es_password=getpass.getpass('Event Store password:')
+
+    es_truststore=input("Event Store truststore file location (for example '/user-home/_global_/eventstore/db2eventstore-1234567890/clientkeystore':")
+    es_truststore_password=getpass.getpass("Event Store truststore password:")
+    # Change the lines below, if keystore and truststore is not in the same file
+    es_keystore=es_truststore
+    es_keystore_password=es_truststore_password
+
+    return es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password
+
+
+def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None):
     """Configures IBM Streams for a connection to IBM Db2 Event Store database.
 
     Creates an application configuration object containing the required properties with connection information.
 
     Example for creating a configuration for a Streams instance with connection details::
 
-        from streamsx.rest import Instance
-        import streamsx.topology.context
-        from icpd_core import icpd_util
-        
-        cfg=icpd_util.get_service_instance_details(name='your-streams-instance')
-        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
-        instance = Instance.of_service(cfg)
-        app_cfg = configure_connection(instance, database='TESTDB', connection='HostIP:Port1;HostIP:Port2', user='db2-user', password='db2-password')
+        from streamsx.rest import Instance
+        import streamsx.topology.context
+        from icpd_core import icpd_util
+        
+        cfg=icpd_util.get_service_instance_details(name='your-streams-instance')
+        cfg[streamsx.topology.context.ConfigParams.SSL_VERIFY] = False
+        instance = Instance.of_service(cfg)
+        app_cfg = configure_connection(instance, database='TESTDB', connection='HostIP:Port1;HostIP:Port2', user='db2-user', password='db2-password')
+
 
     Args:
         instance(streamsx.rest_primitives.Instance): IBM Streams instance object.
@@ -43,6 +134,9 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         password(str): Password for the IBM Db2 Event Store User in order to connect.
         keystore_password(str): Password for key store file.
         truststore_password(str): Password for trust store file.
+        plugin_name(str): The plug-in name for the SSL connection.
+        plugin_flag(str): Set "false" to disable SSL plugin. If not specified the default is plugin is used.
+        ssl_connection(str): Set "false" to disable SSL connection. If not specified the default is SSL enabled.
 
     Returns:
         Name of the application configuration.
@@ -63,6 +157,12 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         properties['keyStorePassword']=keystore_password
     if truststore_password is not None:
         properties['trustStorePassword']=truststore_password
+    if plugin_name is not None:
+        properties['pluginName']=plugin_name
+    if plugin_flag is not None:
+        properties['pluginFlag']=plugin_flag
+    if ssl_connection is not None:
+        properties['sslConnection']=ssl_connection
     
     # check if application configuration exists
     app_config = instance.get_application_configurations(name=name)
@@ -75,14 +175,15 @@ def configure_connection(instance, name='eventstore', database=None, connection=
     return name
 
 
-def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, schema=None, name=None):
+def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
 
-    Creates the table if the table does not exist. Set the ``primary_key`` and/or ``partitioning_key`` in case the table needs to be created.
+    Creates the table if the table does not exist. Set the ``primary_key`` and ``partitioning_key`` in case the table needs to be created.
 
     Example of a Streams application inserting rows to a table in a Db2 Event Store database::
+
         # provide connection endpoint information in format <HostIP:Port from JDBC URL>;<SCALA connection URL>
         es_connection = 'HostIP:Port1;HostIP:Port2'
         # generate sample tuples with the schema of the target table
@@ -90,7 +191,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         schema=StreamSchema('tuple<int32 id, rstring name>').as_tuple()
         s = s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
         # insert tuple data into table as rows
-        res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id')
+        res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id', partitioning_key='id')
 
     Args:
         stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
@@ -111,6 +212,8 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         keystore(str): Path to the key store file for the SSL connection.
         keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function ``configure_connection()``.
         plugin_name(str): The plug-in name for the SSL connection. The default value is IBMPrivateCloudAuth.      
+        plugin_flag(str|bool): Set "false" or ``False`` to disable SSL plugin. If not specified, the default is use plugin.
+        ssl_connection(str|bool): Set "false" or ``False`` to disable SSL connection. If not specified the default is SSL enabled.
         schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
         name(str): Sink name in the Streams context, defaults to a generated name.
 
@@ -142,8 +245,29 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
     if keystore_password is not None:
         _op.params['keyStorePassword'] = keystore_password
     if plugin_name is not None:
-        _op.params['pluginFlag'] = _op.expression('true')
         _op.params['pluginName'] = plugin_name
+    if plugin_flag is not None:
+        if isinstance(plugin_flag, (bool)):
+            if plugin_flag:
+                _op.params['pluginFlag'] = _op.expression('true')
+            else:
+                _op.params['pluginFlag'] = _op.expression('false')
+        else:
+            if 'true' in plugin_flag.lower():
+                _op.params['pluginFlag'] = _op.expression('true')
+            else:
+                _op.params['pluginFlag'] = _op.expression('false')
+    if ssl_connection is not None:
+        if isinstance(ssl_connection, (bool)):
+            if ssl_connection:
+                _op.params['sslConnection'] = _op.expression('true')
+            else:
+                _op.params['sslConnection'] = _op.expression('false')
+        else:
+            if 'true' in ssl_connection.lower():
+                _op.params['sslConnection'] = _op.expression('true')
+            else:
+                _op.params['sslConnection'] = _op.expression('false')
     if truststore is not None:
         _op.params['trustStore'] = _add_store_file(stream.topology, truststore)
     if truststore_password is not None:
