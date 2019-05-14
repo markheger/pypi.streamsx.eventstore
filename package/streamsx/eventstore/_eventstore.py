@@ -12,6 +12,8 @@ import wget
 from tempfile import gettempdir
 import shutil
 import tarfile
+import requests
+import re
 
 
 def _add_toolkit_dependency(topo):
@@ -33,24 +35,30 @@ def _download_tk(url, name):
     if os.path.isfile(tmpfile):
         os.remove(tmpfile)
     wget.download(url, tmpfile)
-    print (tmpfile + ": " + str(os.stat(tmpfile)))
+    #print (tmpfile + ": " + str(os.stat(tmpfile)))
     tar = tarfile.open(tmpfile, "r:gz")
     tar.extractall(path=targetdir)
     tar.close()
     toolkit_path = targetdir + '/' + name
     tkfile = toolkit_path + '/toolkit.xml'
     if os.path.isfile(tkfile):
-        print (tkfile + ': ' + str(os.stat(tkfile)))
+        f = open(tkfile, "r")
+        for x in f:
+            if 'toolkit name' in x:
+                version_dump = x.replace('requiredProductVersion="4.3.0.0"', '').lstrip()
+                print('\n'+version_dump)
+                break
+        f.close()
     return toolkit_path
 
 
 def download_toolkit(url=None):
-    """Downloads the event store toolkit from GitHub.
+    """Downloads the latest Event Store toolkit toolkit from GitHub.
 
-    Example for updating the Event Store toolkit::
+    Example for updating the Event Store toolkit with latest toolkit from GitHub::
 
         # download event store toolkit from GitHub
-        eventstore_toolkit = es.update_toolkit(url=None)
+        eventstore_toolkit = es.update_toolkit()
         # add event store toolkit to topology
         streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
 
@@ -58,8 +66,17 @@ def download_toolkit(url=None):
         eventstore toolkit location
     """
     if url is None:
-        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.0.1-Enterprise-v2/streamsx.eventstore.toolkits-2.0.1-20190503-1449.tgz'
-    eventstore_toolkit = _download_tk(url,'com.ibm.streamsx.eventstore')
+        # get latest toolkit
+        r = requests.get('https://github.com/IBMStreams/streamsx.eventstore/releases/latest')
+        r.raise_for_status()
+        if r.text is not None:
+            s = re.search(r'/IBMStreams/streamsx.eventstore/releases/download/.*tgz', r.text).group()
+            url = 'https://github.com/' + s
+    if url is not None:
+        print('Download: ' + url)
+        eventstore_toolkit = _download_tk(url,'com.ibm.streamsx.eventstore')
+    else:
+        raise ValueError("Invalid URL")
     return eventstore_toolkit
 
 
@@ -91,7 +108,7 @@ def get_service_details(service_configuration):
     return es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password
 
 
-def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None):
+def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None):
     """Configures IBM Streams for a connection to IBM Db2 Event Store database.
 
     Creates an application configuration object containing the required properties with connection information.
@@ -117,6 +134,9 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         password(str): Password for the IBM Db2 Event Store User in order to connect.
         keystore_password(str): Password for key store file.
         truststore_password(str): Password for trust store file.
+        plugin_name(str): The plug-in name for the SSL connection.
+        plugin_flag(str): Set "false" to disable SSL plugin. If not specified the default is plugin is used.
+        ssl_connection(str): Set "false" to disable SSL connection. If not specified the default is SSL enabled.
 
     Returns:
         Name of the application configuration.
@@ -137,6 +157,12 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         properties['keyStorePassword']=keystore_password
     if truststore_password is not None:
         properties['trustStorePassword']=truststore_password
+    if plugin_name is not None:
+        properties['pluginName']=plugin_name
+    if plugin_flag is not None:
+        properties['pluginFlag']=plugin_flag
+    if ssl_connection is not None:
+        properties['sslConnection']=ssl_connection
     
     # check if application configuration exists
     app_config = instance.get_application_configurations(name=name)
@@ -149,7 +175,7 @@ def configure_connection(instance, name='eventstore', database=None, connection=
     return name
 
 
-def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, schema=None, name=None):
+def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
 
     Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
@@ -186,6 +212,8 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         keystore(str): Path to the key store file for the SSL connection.
         keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function ``configure_connection()``.
         plugin_name(str): The plug-in name for the SSL connection. The default value is IBMPrivateCloudAuth.      
+        plugin_flag(str|bool): Set "false" or ``False`` to disable SSL plugin. If not specified, the default is use plugin.
+        ssl_connection(str|bool): Set "false" or ``False`` to disable SSL connection. If not specified the default is SSL enabled.
         schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
         name(str): Sink name in the Streams context, defaults to a generated name.
 
@@ -217,8 +245,29 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
     if keystore_password is not None:
         _op.params['keyStorePassword'] = keystore_password
     if plugin_name is not None:
-        _op.params['pluginFlag'] = _op.expression('true')
         _op.params['pluginName'] = plugin_name
+    if plugin_flag is not None:
+        if isinstance(plugin_flag, (bool)):
+            if plugin_flag:
+                _op.params['pluginFlag'] = _op.expression('true')
+            else:
+                _op.params['pluginFlag'] = _op.expression('false')
+        else:
+            if 'true' in plugin_flag.lower():
+                _op.params['pluginFlag'] = _op.expression('true')
+            else:
+                _op.params['pluginFlag'] = _op.expression('false')
+    if ssl_connection is not None:
+        if isinstance(ssl_connection, (bool)):
+            if ssl_connection:
+                _op.params['sslConnection'] = _op.expression('true')
+            else:
+                _op.params['sslConnection'] = _op.expression('false')
+        else:
+            if 'true' in ssl_connection.lower():
+                _op.params['sslConnection'] = _op.expression('true')
+            else:
+                _op.params['sslConnection'] = _op.expression('false')
     if truststore is not None:
         _op.params['trustStore'] = _add_store_file(stream.topology, truststore)
     if truststore_password is not None:
