@@ -14,7 +14,8 @@ import shutil
 import tarfile
 import requests
 import re
-
+import urllib.parse as up
+import json
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -80,7 +81,52 @@ def download_toolkit(url=None):
     return eventstore_toolkit
 
 
-def get_service_details(service_configuration):
+
+def get_certificate(service_configuration, name='EventStore-1'):
+    """Retrieve keystore and truststore file location for Event Store service in ICP4D.
+
+    Example::
+
+        from icpd_core import icpd_util
+        
+        eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
+        es_truststore, es_keystore = get_certificate(eventstore_cfg, name='your-eventstore-instance')
+
+   Returns:
+        truststore, keystore
+    """
+    
+    eventstore_cfg = service_configuration 
+    token = eventstore_cfg['user_token']
+    jdbc_url = eventstore_cfg['connection_info']['jdbc']
+    p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
+    m = re.search(p,jdbc_url)
+    host = m.group('host')
+    #print(host)
+
+    details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
+    r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
+    if r.status_code==200:
+        sr = r.json()
+        es_db=sr['requestObj']['CreateArguments']['metadata']['database-name']
+        for x in sr['requestObj']['CreateArguments']['metadata']['connectivity-url']:
+            if 'scala' in x['id']:
+                es_connection = x['url']
+                break
+        instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
+        clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
+        es_truststore = clientkeystore
+        es_keystore = clientkeystore
+
+    else:
+        clientkeystore=input("Event Store certificate:")
+        es_keystore=clientkeystore
+        es_keystore=es_truststore
+
+    return es_truststore, es_keystore
+
+
+def get_service_details(service_configuration, name='EventStore-1'):
     """Retrieve connection information for Event Store service in ICP4D.
 
     Example for retrieving Event Store service details::
@@ -88,22 +134,58 @@ def get_service_details(service_configuration):
         from icpd_core import icpd_util
         
         eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
-        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg)
+        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg, name='your-eventstore-instance')
 
    Returns:
         database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
     """
+    
+    eventstore_cfg = service_configuration 
+    token = eventstore_cfg['user_token']
+    jdbc_url = eventstore_cfg['connection_info']['jdbc']
+    p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
+    m = re.search(p,jdbc_url)
+    host = m.group('host')
+    #print(host)
 
-    es_db=input("Event Store database name (for example EVENTDB):")
-    es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
-    es_user=input("Event Store user:")
-    es_password=getpass.getpass('Event Store password:')
+    details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
+    r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
+    if r.status_code==200:
+        sr = r.json()
+        es_db=sr['requestObj']['CreateArguments']['metadata']['database-name']
+        for x in sr['requestObj']['CreateArguments']['metadata']['connectivity-url']:
+            if 'scala' in x['id']:
+                es_connection = x['url']
+                break
+        instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
+        es_user=sr['requestObj']['CreateArguments']['metadata']['credentials']['user']
+        password=sr['requestObj']['CreateArguments']['metadata']['credentials']['password']
+        es_password=getpass.getpass('Event Store password:')
 
-    es_truststore=input("Event Store truststore file location (for example '/user-home/_global_/eventstore/db2eventstore-1234567890/clientkeystore':")
-    es_truststore_password=getpass.getpass("Event Store truststore password:")
-    # Change the lines below, if keystore and truststore is not in the same file
-    es_keystore=es_truststore
-    es_keystore_password=es_truststore_password
+        clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
+        es_truststore = clientkeystore
+        es_keystore = clientkeystore
+
+        session=requests.session()
+        requests.packages.urllib3.disable_warnings()
+        rest_url = 'https://' + host + ':31843/icp4data-databases/'+instance_id+'/zen/com/ibm/event/api/v1/oltp/certificate_password'
+        response = session.get(rest_url, headers={"Authorization": "Bearer " + token}, verify=False)
+        if response.status_code==200:
+            es_truststore_password=response.text
+            es_keystore_password=es_truststore_password
+        else:
+            es_truststore_password=getpass.getpass("Event Store truststore password:")
+            es_keystore_password=es_truststore_password
+    else:
+        es_db=input("Event Store database name (for example EVENTDB):")
+        es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
+        es_user=input("Event Store user:")
+        es_password=getpass.getpass('Event Store password:')
+        es_truststore_password=getpass.getpass("Event Store truststore password:")
+        es_keystore_password=es_truststore_password
+        clientkeystore=input("Event Store certificate:")
+        es_truststore = clientkeystore
+        es_keystore = clientkeystore
 
     return es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password
 
