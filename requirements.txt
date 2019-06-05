@@ -1,2 +1,2 @@
-streamsx
+streamsx>=1.12.10
 wget

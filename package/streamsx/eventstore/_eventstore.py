@@ -157,6 +157,10 @@ def get_service_details(service_configuration, name='EventStore-1'):
             if 'scala' in x['id']:
                 es_connection = x['url']
                 break
+
+        if ';' not in es_connection:
+            es_connection = jdbc_url + ';' + es_connection
+
         instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
         es_user=sr['requestObj']['CreateArguments']['metadata']['credentials']['user']
         password=sr['requestObj']['CreateArguments']['metadata']['credentials']['password']
@@ -245,6 +249,18 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         properties['pluginFlag']=plugin_flag
     if ssl_connection is not None:
         properties['sslConnection']=ssl_connection
+
+    # prepare app config credentials for jdbc toolkit
+    if database is not None and connection is not None and user is not None and password is not None:
+        if ';' in connection:
+            credentials = {}
+            conn = connection.split(";", 1)
+            credentials['username']=user
+            credentials['password']=password
+            jdbcurl = 'jdbc:db2://' + conn[0] + '/' + database
+            credentials['jdbcurl']=jdbcurl
+            # add for app config
+            properties ['credentials'] = json.dumps (credentials)
     
     # check if application configuration exists
     app_config = instance.get_application_configurations(name=name)
