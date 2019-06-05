@@ -146,7 +146,9 @@ def get_service_details(service_configuration, name='EventStore-1'):
     p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
     m = re.search(p,jdbc_url)
     host = m.group('host')
+    port = m.group('port')
     #print(host)
+    jdbc_conn=host+':'+port
 
     details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
     r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
@@ -159,7 +161,7 @@ def get_service_details(service_configuration, name='EventStore-1'):
                 break
 
         if ';' not in es_connection:
-            es_connection = jdbc_url + ';' + es_connection
+            es_connection = jdbc_conn + ';' + es_connection
 
         instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
         es_user=sr['requestObj']['CreateArguments']['metadata']['credentials']['user']
