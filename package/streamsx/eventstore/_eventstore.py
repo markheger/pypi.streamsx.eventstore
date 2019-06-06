@@ -54,7 +54,7 @@ def _download_tk(url, name):
     return toolkit_path
 
 
-def download_toolkit(url=None):
+def download_toolkit(url=None, name=None):
     """Downloads the latest Event Store toolkit toolkit from GitHub.
 
     Example for updating the Event Store toolkit with latest toolkit from GitHub::
@@ -64,9 +64,14 @@ def download_toolkit(url=None):
         # add event store toolkit to topology
         streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
 
+    Args:
+        url(str): Link to toolkit archive (*.tgz) to be downloaded.
+        name(str): Folder name in temporary directory where to extract the toolkit.
+
     Returns:
         eventstore toolkit location
     """
+    dirname = 'streamsx.toolkit'
     if url is None:
         # get latest toolkit
         r = requests.get('https://github.com/IBMStreams/streamsx.eventstore/releases/latest')
@@ -74,9 +79,12 @@ def download_toolkit(url=None):
         if r.text is not None:
             s = re.search(r'/IBMStreams/streamsx.eventstore/releases/download/.*tgz', r.text).group()
             url = 'https://github.com/' + s
+            dirname = 'com.ibm.streamsx.eventstore'
     if url is not None:
+        if name is not None:
+            dirname = name;
         print('Download: ' + url)
-        eventstore_toolkit = _download_tk(url,'com.ibm.streamsx.eventstore')
+        eventstore_toolkit = _download_tk(url, dirname)
     else:
         raise ValueError("Invalid URL")
     return eventstore_toolkit
@@ -92,6 +100,10 @@ def get_certificate(service_configuration, name='EventStore-1'):
         
         eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
         es_truststore, es_keystore = get_certificate(eventstore_cfg, name='your-eventstore-instance')
+
+    Args:
+        service_configuration(dict): Event Store service instance details.
+        name(str): Name of the Event Store instance
 
     Returns:
         truststore, keystore
@@ -139,6 +151,10 @@ def get_service_details(service_configuration, name='EventStore-1'):
         
         eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
         es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg, name='your-eventstore-instance')
+
+    Args:
+        service_configuration(dict): Event Store service instance details.
+        name(str): Name of the Event Store instance
 
     Returns:
         database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
@@ -305,7 +321,7 @@ def _get_jdbc_driver():
                 raise ValueError("Invalid JDBC driver")
 
 
-def run_statement(stream, credentials, truststore, keystore, truststore_password, keystore_password, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMPrivateCloudAuth', security_mechanism=15, vm_arg=None, name=None):
+def run_statement(stream, credentials, truststore, keystore, truststore_password=None, keystore_password=None, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMPrivateCloudAuth', security_mechanism=15, vm_arg=None, name=None):
     """Runs a SQL statement using DB2 Event Store client driver and JDBC database interface.
 
     The statement is called once for each input tuple received. Result sets that are produced by the statement are emitted as output stream tuples.
