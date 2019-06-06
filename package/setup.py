@@ -19,7 +19,7 @@ setup(
     'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 3.6',
   ],
-  install_requires=['streamsx>=1.12.10','wget'],
+  install_requires=['streamsx>=1.12.10','wget','streamsx.database>=1.3.0'],
   
   test_suite='nose.collector',
   tests_require=['nose']

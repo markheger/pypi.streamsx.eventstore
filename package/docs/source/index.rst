@@ -10,7 +10,7 @@ running on IBM Cloud see:
 
   * `streamsx package documentation <https://streamsxtopology.readthedocs.io/en/stable>`_
 
-This package exposes SPL operators in the `com.ibm.streamsx.eventstore <https://github.com/IBMStreams/streamsx.eventstore/>`_ toolkit as Python methods.
+This package exposes SPL operators in the `com.ibm.streamsx.eventstore <https://github.com/IBMStreams/streamsx.eventstore/>`_ toolkit and `com.ibm.streamsx.jdbc <https://github.com/IBMStreams/streamsx.jdbc/>`_ toolkit as Python methods.
 
 .. automodule:: streamsx.eventstore
 

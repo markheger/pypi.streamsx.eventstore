@@ -16,6 +16,7 @@ import requests
 import re
 import urllib.parse as up
 import json
+import streamsx.database as db
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -63,7 +64,7 @@ def download_toolkit(url=None):
         # add event store toolkit to topology
         streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
 
-   Returns:
+    Returns:
         eventstore toolkit location
     """
     if url is None:
@@ -92,8 +93,11 @@ def get_certificate(service_configuration, name='EventStore-1'):
         eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
         es_truststore, es_keystore = get_certificate(eventstore_cfg, name='your-eventstore-instance')
 
-   Returns:
+    Returns:
         truststore, keystore
+
+    .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. versionadded:: 2.3
     """
     
     eventstore_cfg = service_configuration 
@@ -136,8 +140,11 @@ def get_service_details(service_configuration, name='EventStore-1'):
         eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
         es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg, name='your-eventstore-instance')
 
-   Returns:
+    Returns:
         database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
+
+    .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. versionadded:: 2.1
     """
     
     eventstore_cfg = service_configuration 
@@ -273,6 +280,103 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         print ('create application configuration: '+name)
         instance.create_application_configuration(name, properties, description)
     return name
+
+
+def _download_driver_file_from_url(url, tmpfile):
+    r = requests.get(url)
+    with open(tmpfile, 'wb') as fd:
+        for chunk in r.iter_content(chunk_size=128):
+            fd.write(chunk)
+    return tmpfile
+
+def _get_jdbc_driver():
+    jdbc_driver_lib = '/user-home/_global_/eventstore/ibm-event_2.11-1.0.jar'
+    if os.path.isfile(jdbc_driver_lib):
+        return jdbc_driver_lib
+    else:
+        tmpfile = gettempdir() + '/ibm-event_2.11-1.0.jar'
+        if os.path.isfile(tmpfile):
+            return tmpfile
+        else:
+            _download_driver_file_from_url("https://github.com/IBMStreams/streamsx.eventstore/raw/develop/com.ibm.streamsx.eventstore/opt/ibm-event_2.11-1.0.jar", tmpfile)
+            if os.path.isfile(tmpfile):
+                return tmpfile
+            else:
+                raise ValueError("Invalid JDBC driver")
+
+
+def run_statement(stream, credentials, truststore, keystore, truststore_password, keystore_password, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMPrivateCloudAuth', security_mechanism=15, vm_arg=None, name=None):
+    """Runs a SQL statement using DB2 Event Store client driver and JDBC database interface.
+
+    The statement is called once for each input tuple received. Result sets that are produced by the statement are emitted as output stream tuples.
+    
+    This function includes the JDBC driver ('ibm-event_2.11-1.0.jar') for DB2 Event Store database ('COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver') in the application bundle per default.
+
+    Supports two ways to specify the statement:
+
+    * Statement is part of the input stream. You can specify which input stream attribute contains the statement with the ``sql_attribute`` argument. If input stream is of type ``CommonSchema.String``, then you don't need to specify the ``sql_attribute`` argument.
+    * Statement is given with the ``sql`` argument. The statement can contain parameter markers that are set with input stream attributes specified by ``sql_params`` argument.
+
+    Example with "select count" statement and defined output schema with attribute ``TOTAL`` having the result of the query::
+
+        sample_schema = StreamSchema('tuple<int32 TOTAL, rstring string>')
+        sql_query = 'SELECT COUNT(*) AS TOTAL FROM SAMPLE.TAB1'
+        query = topo.source([sql_query]).as_string()
+        res = db.run_statement(query, credentials=credentials, schema=sample_schema)
+    
+
+    Args:
+        stream(Stream): Stream of tuples containing the SQL statements or SQL statement parameter values. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) or ``CommonSchema.String``  as input.
+        credentials(dict|str): The credentials of the IBM cloud DB2 warehouse service in JSON or the name of the application configuration.
+        truststore(str): Path to the trust store file for the SSL connection.
+        keystore(str): Path to the key store file for the SSL connection.
+        truststore_password(str): Password for the trust store file given by the truststore parameter.
+        keystore_password(str): Password for the key store file given by the keystore parameter.
+        schema(StreamSchema): Schema for returned stream. Defaults to input stream schema if not set.             
+        sql(str): String containing the SQL statement. Use this as alternative option to ``sql_attribute`` parameter.
+        sql_attribute(str): Name of the input stream attribute containing the SQL statement. Use this as alternative option to ``sql`` parameter.
+        sql_params(str): The values of SQL statement parameters. These values and SQL statement parameter markers are associated in lexicographic order. For example, the first parameter marker in the SQL statement is associated with the first sql_params value.
+        transaction_size(int): The number of tuples to commit per transaction. The default value is 1.
+        jdbc_driver_class(str): The default driver is for DB2 Event Store database 'COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver'.
+        jdbc_driver_lib(str): Path to the JDBC driver library file. Specify the jar filename with absolute path, containing the class given with ``jdbc_driver_class`` parameter. Per default the 'ibm-event_2.11-1.0.jar' is added to the 'opt' directory in the application bundle.
+        ssl_connection(bool): Use SSL connection, default is ``True``
+        keystore_type(str): Type of the key store file, default is ``PKCS12``.
+        truststore_type(str): Type of the key store file, default is ``PKCS12``.
+        plugin_name(str): Name of the security plugin, default is 'IBMPrivateCloudAuth'.
+        security_mechanism(int): Value of the security mechanism, default is 15 (com.ibm.db2.jcc.DB2BaseDataSource.PLUGIN_SECURITY).
+        vm_arg(str): Arbitrary JVM arguments can be passed to the Streams operator.
+        name(str): Sink name in the Streams context, defaults to a generated name.
+
+    Returns:
+        Output Stream.
+
+    .. versionadded:: 2.4
+    """
+    
+    jdbc_driver_lib = _get_jdbc_driver()  
+    print ('jdbc_driver_lib: '+jdbc_driver_lib)
+
+    return db.run_statement(stream,
+                            credentials,
+                            schema=schema,
+                            sql=sql,
+                            sql_attribute=sql_attribute,
+                            sql_params=sql_params,
+                            transaction_size=transaction_size,
+                            jdbc_driver_class=jdbc_driver_class,
+                            jdbc_driver_lib=jdbc_driver_lib,
+                            ssl_connection=ssl_connection,
+                            truststore=truststore,
+                            truststore_password=truststore_password,
+                            keystore=keystore,
+                            keystore_password=keystore_password,
+                            keystore_type=keystore_type,
+                            truststore_type=truststore_type,
+                            plugin_name=plugin_name,
+                            security_mechanism=security_mechanism,
+                            vm_arg=vm_arg,
+                            name=name)
+
 
 
 def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None, schema=None, name=None):
