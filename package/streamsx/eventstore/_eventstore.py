@@ -282,7 +282,11 @@ def configure_connection(instance, name='eventstore', database=None, connection=
             conn = connection.split(";", 1)
             credentials['username']=user
             credentials['password']=password
-            jdbcurl = 'jdbc:db2://' + conn[0] + '/' + database
+            if ',' in conn[0]:
+                jdbc_conn = conn[0].split(",", 1)
+                jdbcurl = 'jdbc:db2://' + jdbc_conn[0] + '/' + database
+            else:
+                jdbcurl = 'jdbc:db2://' + conn[0] + '/' + database
             credentials['jdbcurl']=jdbcurl
             # add for app config
             properties ['credentials'] = json.dumps (credentials)
@@ -508,7 +512,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
 
 
 class _EventStoreSink(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, keyStore=None, keyStorePassword=None, pluginFlag=None, pluginName=None, sslConnection=None, trustStore=None, trustStorePassword=None, vmArg=None, name=None):
+    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, partitioningKey=None, preserveOrder=None, primaryKey=None, keyStore=None, keyStorePassword=None, pluginFlag=None, pluginName=None, sslConnection=None, trustStore=None, trustStorePassword=None, vmArg=None, name=None):
         topology = stream.topology
         kind="com.ibm.streamsx.eventstore::EventStoreSink"
         inputs=stream
@@ -536,8 +540,6 @@ class _EventStoreSink(streamsx.spl.op.Invoke):
             params['frontEndConnectionFlag'] = frontEndConnectionFlag
         if maxNumActiveBatches is not None:
             params['maxNumActiveBatches'] = maxNumActiveBatches
-        if nullMapString is not None:
-            params['nullMapString'] = nullMapString
         if partitioningKey is not None:
             params['partitioningKey'] = partitioningKey
         if preserveOrder is not None:
