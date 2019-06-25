@@ -189,7 +189,7 @@ def get_service_details(service_configuration, name='EventStore-1'):
         instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
         es_user=sr['requestObj']['CreateArguments']['metadata']['credentials']['user']
         password=sr['requestObj']['CreateArguments']['metadata']['credentials']['password']
-        es_password=getpass.getpass('Event Store password:')
+        es_password=getpass.getpass('Event Store password for user '+es_user+':')
 
         clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
         es_truststore = clientkeystore
@@ -209,7 +209,7 @@ def get_service_details(service_configuration, name='EventStore-1'):
         es_db=input("Event Store database name (for example EVENTDB):")
         es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
         es_user=input("Event Store user:")
-        es_password=getpass.getpass('Event Store password:')
+        es_password=getpass.getpass('Event Store password for user '+es_user+':')
         es_truststore_password=getpass.getpass("Event Store truststore password:")
         es_keystore_password=es_truststore_password
         clientkeystore=input("Event Store certificate:")
@@ -325,7 +325,7 @@ def _get_jdbc_driver():
                 raise ValueError("Invalid JDBC driver")
 
 
-def run_statement(stream, credentials, truststore, keystore, truststore_password=None, keystore_password=None, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMPrivateCloudAuth', security_mechanism=15, vm_arg=None, name=None):
+def run_statement(stream, credentials, truststore, keystore, truststore_password=None, keystore_password=None, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMIAMauth', security_mechanism=15, vm_arg=None, name=None):
     """Runs a SQL statement using DB2 Event Store client driver and JDBC database interface.
 
     The statement is called once for each input tuple received. Result sets that are produced by the statement are emitted as output stream tuples.
@@ -362,7 +362,7 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
         ssl_connection(bool): Use SSL connection, default is ``True``
         keystore_type(str): Type of the key store file, default is ``PKCS12``.
         truststore_type(str): Type of the key store file, default is ``PKCS12``.
-        plugin_name(str): Name of the security plugin, default is 'IBMPrivateCloudAuth'.
+        plugin_name(str): Name of the security plugin, default is 'IBMIAMauth'.
         security_mechanism(int): Value of the security mechanism, default is 15 (com.ibm.db2.jcc.DB2BaseDataSource.PLUGIN_SECURITY).
         vm_arg(str): Arbitrary JVM arguments can be passed to the Streams operator.
         name(str): Sink name in the Streams context, defaults to a generated name.
@@ -435,7 +435,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         truststore_password(str): Password for the trust store file given by the truststore parameter. Alternative this parameter can be set with function ``configure_connection()``.
         keystore(str): Path to the key store file for the SSL connection.
         keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function ``configure_connection()``.
-        plugin_name(str): The plug-in name for the SSL connection. The default value is IBMPrivateCloudAuth.      
+        plugin_name(str): The plug-in name for the SSL connection. The default value is IBMIAMauth.      
         plugin_flag(str|bool): Set "false" or ``False`` to disable SSL plugin. If not specified, the default is use plugin.
         ssl_connection(str|bool): Set "false" or ``False`` to disable SSL connection. If not specified the default is SSL enabled.
         schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
@@ -470,6 +470,8 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         _op.params['keyStorePassword'] = keystore_password
     if plugin_name is not None:
         _op.params['pluginName'] = plugin_name
+    else:
+        _op.params['pluginName'] = 'IBMIAMauth'
     if plugin_flag is not None:
         if isinstance(plugin_flag, (bool)):
             if plugin_flag:
