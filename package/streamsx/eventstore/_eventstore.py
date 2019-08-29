@@ -13,6 +13,8 @@ from tempfile import gettempdir
 import shutil
 import tarfile
 import requests
+import string
+import random
 import re
 import urllib.parse as up
 import json
@@ -29,9 +31,20 @@ def _add_store_file(topology, path):
     return 'opt/'+filename
 
 
-def _download_tk(url, name):
+def _download_tk(url, name, toolkit_dir):
+    """Downloads and unpacks the toolkit.
+    
+    Args:
+        url(str): the download URL
+        name(str): the subdirectory relative to the temporary directory (/tmp), where the toolkit is unpacked to
+        toolkit_dir(str): the toolkit directory in the archive (where toolkit.xml is located)
+    
+    Returns:
+        str: the absolute toolkit directory
+    """
     targetdir=gettempdir() + '/' + name
-    tmpfile = gettempdir() + '/' + name + '.tgz'
+    rnd = ''.join(random.choice(string.digits) for _ in range(10))
+    tmpfile = gettempdir() + '/' + 'toolkit-' + rnd + '.tgz'
     if os.path.isdir(targetdir):
         shutil.rmtree(targetdir)
     if os.path.isfile(tmpfile):
@@ -41,13 +54,14 @@ def _download_tk(url, name):
     tar = tarfile.open(tmpfile, "r:gz")
     tar.extractall(path=targetdir)
     tar.close()
-    toolkit_path = targetdir + '/' + name
+    os.remove(tmpfile)
+    toolkit_path = targetdir + '/' + toolkit_dir
     tkfile = toolkit_path + '/toolkit.xml'
     if os.path.isfile(tkfile):
         f = open(tkfile, "r")
         for x in f:
             if 'toolkit name' in x:
-                version_dump = x.replace('requiredProductVersion="4.3.0.0"', '').lstrip()
+                version_dump = re.sub(r' requiredProductVersion="[^ ]*"', '', x)
                 print('\n'+version_dump)
                 break
         f.close()
@@ -71,7 +85,10 @@ def download_toolkit(url=None, name=None):
     Returns:
         eventstore toolkit location
     """
-    dirname = 'streamsx.toolkit'
+    if name is None:
+        dirname = 'com.ibm.streamsx.eventstore'
+    else:
+        dirname = name
     if url is None:
         # get latest toolkit
         r = requests.get('https://github.com/IBMStreams/streamsx.eventstore/releases/latest')
@@ -79,12 +96,10 @@ def download_toolkit(url=None, name=None):
         if r.text is not None:
             s = re.search(r'/IBMStreams/streamsx.eventstore/releases/download/.*tgz', r.text).group()
             url = 'https://github.com/' + s
-            dirname = 'com.ibm.streamsx.eventstore'
     if url is not None:
-        if name is not None:
-            dirname = name;
         print('Download: ' + url)
-        eventstore_toolkit = _download_tk(url, dirname)
+        toolkit_xml_dir = 'com.ibm.streamsx.eventstore'
+        eventstore_toolkit = _download_tk(url, dirname, toolkit_xml_dir)
     else:
         raise ValueError("Invalid URL")
     return eventstore_toolkit
