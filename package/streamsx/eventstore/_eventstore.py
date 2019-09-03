@@ -13,8 +13,15 @@ from tempfile import gettempdir
 import shutil
 import tarfile
 import requests
+import string
+import random
 import re
+import urllib.parse as up
+import json
+import streamsx.database as db
+from streamsx.toolkits import download_toolkit
 
+_TOOLKIT_NAME = 'com.ibm.streamsx.eventstore'
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -26,61 +33,93 @@ def _add_store_file(topology, path):
     topology.add_file_dependency(path, 'opt')
     return 'opt/'+filename
 
+def download_toolkit(url=None, target_dir=None):
+    r"""Downloads the latest Eventstore toolkit from GitHub.
 
-def _download_tk(url, name):
-    targetdir=gettempdir() + '/' + name
-    tmpfile = gettempdir() + '/' + name + '.tgz'
-    if os.path.isdir(targetdir):
-        shutil.rmtree(targetdir)
-    if os.path.isfile(tmpfile):
-        os.remove(tmpfile)
-    wget.download(url, tmpfile)
-    #print (tmpfile + ": " + str(os.stat(tmpfile)))
-    tar = tarfile.open(tmpfile, "r:gz")
-    tar.extractall(path=targetdir)
-    tar.close()
-    toolkit_path = targetdir + '/' + name
-    tkfile = toolkit_path + '/toolkit.xml'
-    if os.path.isfile(tkfile):
-        f = open(tkfile, "r")
-        for x in f:
-            if 'toolkit name' in x:
-                version_dump = x.replace('requiredProductVersion="4.3.0.0"', '').lstrip()
-                print('\n'+version_dump)
-                break
-        f.close()
-    return toolkit_path
+    Example for updating the Eventstore toolkit for your topology with the latest toolkit from GitHub::
 
+        import streamsx.eventstore as es
+        # download Eventstore toolkit from GitHub
+        eventstore_toolkit_location = es.download_toolkit()
+        # add the toolkit to topology
+        streamsx.spl.toolkit.add_toolkit(topology, eventstore_toolkit_location)
 
-def download_toolkit(url=None):
-    """Downloads the latest Event Store toolkit toolkit from GitHub.
+    Example for updating the topology with a specific version of the Eventstore toolkit using a URL::
 
-    Example for updating the Event Store toolkit with latest toolkit from GitHub::
+        import streamsx.eventstore as es
+        url220 = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.2.0/streamsx.eventstore.toolkits-2.2.0-20190731-0640.tgz'
+        eventstore_toolkit_location = es.download_toolkit(url=url220)
+        streamsx.spl.toolkit.add_toolkit(topology, eventstore_toolkit_location)
 
-        # download event store toolkit from GitHub
-        eventstore_toolkit = es.update_toolkit()
-        # add event store toolkit to topology
-        streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
+    Args:
+        url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to 
+            download a specific version of the toolkit.
+        target_dir(str): the directory where the toolkit is unpacked to. If a relative path is given,
+            the path is appended to the system temporary directory, for example to /tmp on Unix/Linux systems.
+            If target_dir is ``None`` a location relative to the system temporary directory is chosen.
 
-   Returns:
-        eventstore toolkit location
+    Returns:
+        str: the location of the downloaded Eventstore toolkit
+
+    .. note:: This function requires an outgoing Internet connection
+    .. versionadded:: 2.5
     """
-    if url is None:
-        # get latest toolkit
-        r = requests.get('https://github.com/IBMStreams/streamsx.eventstore/releases/latest')
-        r.raise_for_status()
-        if r.text is not None:
-            s = re.search(r'/IBMStreams/streamsx.eventstore/releases/download/.*tgz', r.text).group()
-            url = 'https://github.com/' + s
-    if url is not None:
-        print('Download: ' + url)
-        eventstore_toolkit = _download_tk(url,'com.ibm.streamsx.eventstore')
+    _toolkit_location = streamsx.toolkits.download_toolkit (toolkit_name=_TOOLKIT_NAME, url=url, target_dir=target_dir)
+    return _toolkit_location
+
+
+def get_certificate(service_configuration, name='EventStore-1'):
+    """Retrieve keystore and truststore file location for Event Store service in ICP4D.
+
+    Example::
+
+        from icpd_core import icpd_util
+        
+        eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
+        es_truststore, es_keystore = get_certificate(eventstore_cfg, name='your-eventstore-instance')
+
+    Args:
+        service_configuration(dict): Event Store service instance details.
+        name(str): Name of the Event Store instance
+
+    Returns:
+        truststore, keystore
+
+    .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. versionadded:: 2.3
+    """
+    
+    eventstore_cfg = service_configuration 
+    token = eventstore_cfg['user_token']
+    jdbc_url = eventstore_cfg['connection_info']['jdbc']
+    p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
+    m = re.search(p,jdbc_url)
+    host = m.group('host')
+    #print(host)
+
+    details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
+    r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
+    if r.status_code==200:
+        sr = r.json()
+        es_db=sr['requestObj']['CreateArguments']['metadata']['database-name']
+        for x in sr['requestObj']['CreateArguments']['metadata']['connectivity-url']:
+            if 'scala' in x['id']:
+                es_connection = x['url']
+                break
+        instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
+        clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
+        es_truststore = clientkeystore
+        es_keystore = clientkeystore
+
     else:
-        raise ValueError("Invalid URL")
-    return eventstore_toolkit
+        clientkeystore=input("Event Store certificate:")
+        es_keystore=clientkeystore
+        es_keystore=es_truststore
+
+    return es_truststore, es_keystore
 
 
-def get_service_details(service_configuration):
+def get_service_details(service_configuration, name='EventStore-1'):
     """Retrieve connection information for Event Store service in ICP4D.
 
     Example for retrieving Event Store service details::
@@ -88,22 +127,73 @@ def get_service_details(service_configuration):
         from icpd_core import icpd_util
         
         eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
-        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg)
+        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg, name='your-eventstore-instance')
 
-   Returns:
+    Args:
+        service_configuration(dict): Event Store service instance details.
+        name(str): Name of the Event Store instance
+
+    Returns:
         database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
+
+    .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. versionadded:: 2.1
     """
+    
+    eventstore_cfg = service_configuration
+    if eventstore_cfg is None:
+        raise ValueError("Invalid service_configuration")
+    token = eventstore_cfg['user_token']
+    jdbc_url = eventstore_cfg['connection_info']['jdbc']
+    p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
+    m = re.search(p,jdbc_url)
+    host = m.group('host')
+    port = m.group('port')
+    #print(host)
+    jdbc_conn=host+':'+port
 
-    es_db=input("Event Store database name (for example EVENTDB):")
-    es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
-    es_user=input("Event Store user:")
-    es_password=getpass.getpass('Event Store password:')
+    details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
+    r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
+    if r.status_code==200:
+        sr = r.json()
+        es_db=sr['requestObj']['CreateArguments']['metadata']['database-name']
+        for x in sr['requestObj']['CreateArguments']['metadata']['connectivity-url']:
+            if 'scala' in x['id']:
+                es_connection = x['url']
+                break
 
-    es_truststore=input("Event Store truststore file location (for example '/user-home/_global_/eventstore/db2eventstore-1234567890/clientkeystore':")
-    es_truststore_password=getpass.getpass("Event Store truststore password:")
-    # Change the lines below, if keystore and truststore is not in the same file
-    es_keystore=es_truststore
-    es_keystore_password=es_truststore_password
+        if ';' not in es_connection:
+            es_connection = jdbc_conn + ';' + es_connection
+
+        instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
+        es_user=sr['requestObj']['CreateArguments']['metadata']['credentials']['user']
+        password=sr['requestObj']['CreateArguments']['metadata']['credentials']['password']
+        es_password=getpass.getpass('Event Store password for user '+es_user+':')
+
+        clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
+        es_truststore = clientkeystore
+        es_keystore = clientkeystore
+
+        session=requests.session()
+        requests.packages.urllib3.disable_warnings()
+        rest_url = 'https://' + host + ':31843/icp4data-databases/'+instance_id+'/zen/com/ibm/event/api/v1/oltp/certificate_password'
+        response = session.get(rest_url, headers={"Authorization": "Bearer " + token}, verify=False)
+        if response.status_code==200:
+            es_truststore_password=response.text
+            es_keystore_password=es_truststore_password
+        else:
+            es_truststore_password=getpass.getpass("Event Store truststore password:")
+            es_keystore_password=es_truststore_password
+    else:
+        es_db=input("Event Store database name (for example EVENTDB):")
+        es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
+        es_user=input("Event Store user:")
+        es_password=getpass.getpass('Event Store password for user '+es_user+':')
+        es_truststore_password=getpass.getpass("Event Store truststore password:")
+        es_keystore_password=es_truststore_password
+        clientkeystore=input("Event Store certificate:")
+        es_truststore = clientkeystore
+        es_keystore = clientkeystore
 
     return es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password
 
@@ -163,6 +253,22 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         properties['pluginFlag']=plugin_flag
     if ssl_connection is not None:
         properties['sslConnection']=ssl_connection
+
+    # prepare app config credentials for jdbc toolkit
+    if database is not None and connection is not None and user is not None and password is not None:
+        if ';' in connection:
+            credentials = {}
+            conn = connection.split(";", 1)
+            credentials['username']=user
+            credentials['password']=password
+            if ',' in conn[0]:
+                jdbc_conn = conn[0].split(",", 1)
+                jdbcurl = 'jdbc:db2://' + jdbc_conn[0] + '/' + database
+            else:
+                jdbcurl = 'jdbc:db2://' + conn[0] + '/' + database
+            credentials['jdbcurl']=jdbcurl
+            # add for app config
+            properties ['credentials'] = json.dumps (credentials)
     
     # check if application configuration exists
     app_config = instance.get_application_configurations(name=name)
@@ -173,6 +279,103 @@ def configure_connection(instance, name='eventstore', database=None, connection=
         print ('create application configuration: '+name)
         instance.create_application_configuration(name, properties, description)
     return name
+
+
+def _download_driver_file_from_url(url, tmpfile):
+    r = requests.get(url)
+    with open(tmpfile, 'wb') as fd:
+        for chunk in r.iter_content(chunk_size=128):
+            fd.write(chunk)
+    return tmpfile
+
+def _get_jdbc_driver():
+    jdbc_driver_lib = '/user-home/_global_/eventstore/ibm-event_2.11-1.0.jar'
+    if os.path.isfile(jdbc_driver_lib):
+        return jdbc_driver_lib
+    else:
+        tmpfile = gettempdir() + '/ibm-event_2.11-1.0.jar'
+        if os.path.isfile(tmpfile):
+            return tmpfile
+        else:
+            _download_driver_file_from_url("https://github.com/IBMStreams/streamsx.eventstore/raw/develop/com.ibm.streamsx.eventstore/opt/ibm-event_2.11-1.0.jar", tmpfile)
+            if os.path.isfile(tmpfile):
+                return tmpfile
+            else:
+                raise ValueError("Invalid JDBC driver")
+
+
+def run_statement(stream, credentials, truststore, keystore, truststore_password=None, keystore_password=None, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMIAMauth', security_mechanism=15, vm_arg=None, name=None):
+    """Runs a SQL statement using DB2 Event Store client driver and JDBC database interface.
+
+    The statement is called once for each input tuple received. Result sets that are produced by the statement are emitted as output stream tuples.
+    
+    This function includes the JDBC driver ('ibm-event_2.11-1.0.jar') for DB2 Event Store database ('COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver') in the application bundle per default.
+
+    Supports two ways to specify the statement:
+
+    * Statement is part of the input stream. You can specify which input stream attribute contains the statement with the ``sql_attribute`` argument. If input stream is of type ``CommonSchema.String``, then you don't need to specify the ``sql_attribute`` argument.
+    * Statement is given with the ``sql`` argument. The statement can contain parameter markers that are set with input stream attributes specified by ``sql_params`` argument.
+
+    Example with "select count" statement and defined output schema with attribute ``TOTAL`` having the result of the query::
+
+        sample_schema = StreamSchema('tuple<int32 TOTAL, rstring string>')
+        sql_query = 'SELECT COUNT(*) AS TOTAL FROM SAMPLE.TAB1'
+        query = topo.source([sql_query]).as_string()
+        res = db.run_statement(query, credentials=credentials, schema=sample_schema)
+    
+
+    Args:
+        stream(Stream): Stream of tuples containing the SQL statements or SQL statement parameter values. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) or ``CommonSchema.String``  as input.
+        credentials(dict|str): The credentials of the IBM cloud DB2 warehouse service in JSON or the name of the application configuration.
+        truststore(str): Path to the trust store file for the SSL connection.
+        keystore(str): Path to the key store file for the SSL connection.
+        truststore_password(str): Password for the trust store file given by the truststore parameter.
+        keystore_password(str): Password for the key store file given by the keystore parameter.
+        schema(StreamSchema): Schema for returned stream. Defaults to input stream schema if not set.             
+        sql(str): String containing the SQL statement. Use this as alternative option to ``sql_attribute`` parameter.
+        sql_attribute(str): Name of the input stream attribute containing the SQL statement. Use this as alternative option to ``sql`` parameter.
+        sql_params(str): The values of SQL statement parameters. These values and SQL statement parameter markers are associated in lexicographic order. For example, the first parameter marker in the SQL statement is associated with the first sql_params value.
+        transaction_size(int): The number of tuples to commit per transaction. The default value is 1.
+        jdbc_driver_class(str): The default driver is for DB2 Event Store database 'COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver'.
+        jdbc_driver_lib(str): Path to the JDBC driver library file. Specify the jar filename with absolute path, containing the class given with ``jdbc_driver_class`` parameter. Per default the 'ibm-event_2.11-1.0.jar' is added to the 'opt' directory in the application bundle.
+        ssl_connection(bool): Use SSL connection, default is ``True``
+        keystore_type(str): Type of the key store file, default is ``PKCS12``.
+        truststore_type(str): Type of the key store file, default is ``PKCS12``.
+        plugin_name(str): Name of the security plugin, default is 'IBMIAMauth'.
+        security_mechanism(int): Value of the security mechanism, default is 15 (com.ibm.db2.jcc.DB2BaseDataSource.PLUGIN_SECURITY).
+        vm_arg(str): Arbitrary JVM arguments can be passed to the Streams operator.
+        name(str): Sink name in the Streams context, defaults to a generated name.
+
+    Returns:
+        Output Stream.
+
+    .. versionadded:: 2.4
+    """
+    
+    jdbc_driver_lib = _get_jdbc_driver()  
+    print ('jdbc_driver_lib: '+jdbc_driver_lib)
+
+    return db.run_statement(stream,
+                            credentials,
+                            schema=schema,
+                            sql=sql,
+                            sql_attribute=sql_attribute,
+                            sql_params=sql_params,
+                            transaction_size=transaction_size,
+                            jdbc_driver_class=jdbc_driver_class,
+                            jdbc_driver_lib=jdbc_driver_lib,
+                            ssl_connection=ssl_connection,
+                            truststore=truststore,
+                            truststore_password=truststore_password,
+                            keystore=keystore,
+                            keystore_password=keystore_password,
+                            keystore_type=keystore_type,
+                            truststore_type=truststore_type,
+                            plugin_name=plugin_name,
+                            security_mechanism=security_mechanism,
+                            vm_arg=vm_arg,
+                            name=name)
+
 
 
 def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None, schema=None, name=None):
@@ -211,7 +414,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         truststore_password(str): Password for the trust store file given by the truststore parameter. Alternative this parameter can be set with function ``configure_connection()``.
         keystore(str): Path to the key store file for the SSL connection.
         keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function ``configure_connection()``.
-        plugin_name(str): The plug-in name for the SSL connection. The default value is IBMPrivateCloudAuth.      
+        plugin_name(str): The plug-in name for the SSL connection. The default value is IBMIAMauth.      
         plugin_flag(str|bool): Set "false" or ``False`` to disable SSL plugin. If not specified, the default is use plugin.
         ssl_connection(str|bool): Set "false" or ``False`` to disable SSL connection. If not specified the default is SSL enabled.
         schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
@@ -246,6 +449,8 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         _op.params['keyStorePassword'] = keystore_password
     if plugin_name is not None:
         _op.params['pluginName'] = plugin_name
+    else:
+        _op.params['pluginName'] = 'IBMIAMauth'
     if plugin_flag is not None:
         if isinstance(plugin_flag, (bool)):
             if plugin_flag:
@@ -288,7 +493,7 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
 
 
 class _EventStoreSink(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, nullMapString=None, partitioningKey=None, preserveOrder=None, primaryKey=None, keyStore=None, keyStorePassword=None, pluginFlag=None, pluginName=None, sslConnection=None, trustStore=None, trustStorePassword=None, vmArg=None, name=None):
+    def __init__(self, stream, schema, tableName, connectionString=None, databaseName=None, schemaName=None, batchSize=None, configObject=None, eventStorePassword=None, eventStoreUser=None, frontEndConnectionFlag=None, maxNumActiveBatches=None, partitioningKey=None, preserveOrder=None, primaryKey=None, keyStore=None, keyStorePassword=None, pluginFlag=None, pluginName=None, sslConnection=None, trustStore=None, trustStorePassword=None, vmArg=None, name=None):
         topology = stream.topology
         kind="com.ibm.streamsx.eventstore::EventStoreSink"
         inputs=stream
@@ -316,8 +521,6 @@ class _EventStoreSink(streamsx.spl.op.Invoke):
             params['frontEndConnectionFlag'] = frontEndConnectionFlag
         if maxNumActiveBatches is not None:
             params['maxNumActiveBatches'] = maxNumActiveBatches
-        if nullMapString is not None:
-            params['nullMapString'] = nullMapString
         if partitioningKey is not None:
             params['partitioningKey'] = partitioningKey
         if preserveOrder is not None:

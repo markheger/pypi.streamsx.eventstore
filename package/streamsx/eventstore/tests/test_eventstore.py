@@ -11,7 +11,10 @@ import streamsx.rest as sr
 
 import unittest
 import os
-
+import glob
+import shutil
+import uuid
+from tempfile import gettempdir
 
 
 class TestParams(unittest.TestCase):
@@ -38,7 +41,7 @@ class TestParams(unittest.TestCase):
     def test_get_service_details(self):
         topo = Topology()
         es_cfg = None
-        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = es.get_service_details(es_cfg)
+        self.assertRaises(ValueError, es.get_service_details, es_cfg)
 
 
 ##
@@ -84,4 +87,49 @@ class TestDistributed(unittest.TestCase):
         # build only
         self._build_only(name, topo)
 
+class TestDownloadToolkit(unittest.TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        # delete downloaded *.tgz (should be deleted in _download_toolkit(...)
+        for f in glob.glob(gettempdir() + '/toolkit-[0-9]*.tgz'):
+            try:
+                os.remove(f)
+                print ('file removed: ' + f)
+            except:
+                print('Error deleting file: ', f)
+        # delete unpacked toolkits
+        for d in glob.glob(gettempdir() + '/pypi.streamsx.eventstore.tests-*'):
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+        for d in glob.glob(gettempdir() + '/com.ibm.streamsx.eventstore'):
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+
+    def test_download_latest(self):
+        topology = Topology()
+        location = es.download_toolkit()
+        print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
+
+    def test_download_with_url(self):
+        topology = Topology()
+        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.2.0/streamsx.eventstore.toolkits-2.2.0-20190731-0640.tgz'
+        location = es.download_toolkit(url=url)
+        print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
+
+    def test_download_latest_with_target_dir(self):
+        topology = Topology()
+        target_dir = 'pypi.streamsx.eventstore.tests-' + str(uuid.uuid4()) + '/eventstore-toolkit'
+        location = es.download_toolkit(target_dir=target_dir)
+        print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
+
+    def test_download_with_url_and_target_dir(self):
+        topology = Topology()
+        target_dir = 'pypi.streamsx.eventstore.tests-' + str(uuid.uuid4()) + '/eventstore-toolkit'
+        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.2.0/streamsx.eventstore.toolkits-2.2.0-20190731-0640.tgz'
+        location = es.download_toolkit(url=url, target_dir=target_dir)
+        print('toolkit location: ' + location)
+        streamsx.spl.toolkit.add_toolkit(topology, location)
 

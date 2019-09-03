@@ -1,2 +1,3 @@
-streamsx
-wget
+streamsx>=1.12.10
+streamsx.database>=1.3.0
+streamsx.toolkits
