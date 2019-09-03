@@ -19,6 +19,9 @@ import re
 import urllib.parse as up
 import json
 import streamsx.database as db
+from streamsx.toolkits import download_toolkit
+
+_TOOLKIT_NAME = 'com.ibm.streamsx.eventstore'
 
 def _add_toolkit_dependency(topo):
     # IMPORTANT: Dependency of this python wrapper to a specific toolkit version
@@ -30,80 +33,39 @@ def _add_store_file(topology, path):
     topology.add_file_dependency(path, 'opt')
     return 'opt/'+filename
 
+def download_toolkit(url=None, target_dir=None):
+    r"""Downloads the latest Eventstore toolkit from GitHub.
 
-def _download_tk(url, name, toolkit_dir):
-    """Downloads and unpacks the toolkit.
-    
-    Args:
-        url(str): the download URL
-        name(str): the subdirectory relative to the temporary directory (/tmp), where the toolkit is unpacked to
-        toolkit_dir(str): the toolkit directory in the archive (where toolkit.xml is located)
-    
-    Returns:
-        str: the absolute toolkit directory
-    """
-    targetdir=gettempdir() + '/' + name
-    rnd = ''.join(random.choice(string.digits) for _ in range(10))
-    tmpfile = gettempdir() + '/' + 'toolkit-' + rnd + '.tgz'
-    if os.path.isdir(targetdir):
-        shutil.rmtree(targetdir)
-    if os.path.isfile(tmpfile):
-        os.remove(tmpfile)
-    wget.download(url, tmpfile)
-    #print (tmpfile + ": " + str(os.stat(tmpfile)))
-    tar = tarfile.open(tmpfile, "r:gz")
-    tar.extractall(path=targetdir)
-    tar.close()
-    os.remove(tmpfile)
-    toolkit_path = targetdir + '/' + toolkit_dir
-    tkfile = toolkit_path + '/toolkit.xml'
-    if os.path.isfile(tkfile):
-        f = open(tkfile, "r")
-        for x in f:
-            if 'toolkit name' in x:
-                version_dump = re.sub(r' requiredProductVersion="[^ ]*"', '', x)
-                print('\n'+version_dump)
-                break
-        f.close()
-    return toolkit_path
+    Example for updating the Eventstore toolkit for your topology with the latest toolkit from GitHub::
 
+        import streamsx.eventstore as es
+        # download Eventstore toolkit from GitHub
+        eventstore_toolkit_location = es.download_toolkit()
+        # add the toolkit to topology
+        streamsx.spl.toolkit.add_toolkit(topology, eventstore_toolkit_location)
 
-def download_toolkit(url=None, name=None):
-    """Downloads the latest Event Store toolkit toolkit from GitHub.
+    Example for updating the topology with a specific version of the Eventstore toolkit using a URL::
 
-    Example for updating the Event Store toolkit with latest toolkit from GitHub::
-
-        # download event store toolkit from GitHub
-        eventstore_toolkit = es.update_toolkit()
-        # add event store toolkit to topology
-        streamsx.spl.toolkit.add_toolkit(topo, eventstore_toolkit)
+        import streamsx.eventstore as es
+        url220 = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.2.0/streamsx.eventstore.toolkits-2.2.0-20190731-0640.tgz'
+        eventstore_toolkit_location = es.download_toolkit(url=url220)
+        streamsx.spl.toolkit.add_toolkit(topology, eventstore_toolkit_location)
 
     Args:
-        url(str): Link to toolkit archive (*.tgz) to be downloaded.
-        name(str): Folder name in temporary directory where to extract the toolkit.
+        url(str): Link to toolkit archive (\*.tgz) to be downloaded. Use this parameter to 
+            download a specific version of the toolkit.
+        target_dir(str): the directory where the toolkit is unpacked to. If a relative path is given,
+            the path is appended to the system temporary directory, for example to /tmp on Unix/Linux systems.
+            If target_dir is ``None`` a location relative to the system temporary directory is chosen.
 
     Returns:
-        eventstore toolkit location
-    """
-    if name is None:
-        dirname = 'com.ibm.streamsx.eventstore'
-    else:
-        dirname = name
-    if url is None:
-        # get latest toolkit
-        r = requests.get('https://github.com/IBMStreams/streamsx.eventstore/releases/latest')
-        r.raise_for_status()
-        if r.text is not None:
-            s = re.search(r'/IBMStreams/streamsx.eventstore/releases/download/.*tgz', r.text).group()
-            url = 'https://github.com/' + s
-    if url is not None:
-        print('Download: ' + url)
-        toolkit_xml_dir = 'com.ibm.streamsx.eventstore'
-        eventstore_toolkit = _download_tk(url, dirname, toolkit_xml_dir)
-    else:
-        raise ValueError("Invalid URL")
-    return eventstore_toolkit
+        str: the location of the downloaded Eventstore toolkit
 
+    .. note:: This function requires an outgoing Internet connection
+    .. versionadded:: 2.5
+    """
+    _toolkit_location = streamsx.toolkits.download_toolkit (toolkit_name=_TOOLKIT_NAME, url=url, target_dir=target_dir)
+    return _toolkit_location
 
 
 def get_certificate(service_configuration, name='EventStore-1'):
@@ -178,7 +140,9 @@ def get_service_details(service_configuration, name='EventStore-1'):
     .. versionadded:: 2.1
     """
     
-    eventstore_cfg = service_configuration 
+    eventstore_cfg = service_configuration
+    if eventstore_cfg is None:
+        raise ValueError("Invalid service_configuration")
     token = eventstore_cfg['user_token']
     jdbc_url = eventstore_cfg['connection_info']['jdbc']
     p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'

@@ -41,7 +41,7 @@ class TestParams(unittest.TestCase):
     def test_get_service_details(self):
         topo = Topology()
         es_cfg = None
-        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = es.get_service_details(es_cfg)
+        self.assertRaises(ValueError, es.get_service_details, es_cfg)
 
 
 ##
@@ -113,7 +113,7 @@ class TestDownloadToolkit(unittest.TestCase):
 
     def test_download_with_url(self):
         topology = Topology()
-        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.0.0-Enterprise-v2/streamsx.eventstore.toolkits-2.0.0-20190503-0851.tgz'
+        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.2.0/streamsx.eventstore.toolkits-2.2.0-20190731-0640.tgz'
         location = es.download_toolkit(url=url)
         print('toolkit location: ' + location)
         streamsx.spl.toolkit.add_toolkit(topology, location)
@@ -121,16 +121,15 @@ class TestDownloadToolkit(unittest.TestCase):
     def test_download_latest_with_target_dir(self):
         topology = Topology()
         target_dir = 'pypi.streamsx.eventstore.tests-' + str(uuid.uuid4()) + '/eventstore-toolkit'
-        location = es.download_toolkit(name=target_dir)
+        location = es.download_toolkit(target_dir=target_dir)
         print('toolkit location: ' + location)
         streamsx.spl.toolkit.add_toolkit(topology, location)
 
     def test_download_with_url_and_target_dir(self):
         topology = Topology()
         target_dir = 'pypi.streamsx.eventstore.tests-' + str(uuid.uuid4()) + '/eventstore-toolkit'
-        ver = '1.9.0'
-        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.0.0-Enterprise-v2/streamsx.eventstore.toolkits-2.0.0-20190503-0851.tgz'
-        location = es.download_toolkit(url=url, name=target_dir)
+        url = 'https://github.com/IBMStreams/streamsx.eventstore/releases/download/v2.2.0/streamsx.eventstore.toolkits-2.2.0-20190731-0640.tgz'
+        location = es.download_toolkit(url=url, target_dir=target_dir)
         print('toolkit location: ' + location)
         streamsx.spl.toolkit.add_toolkit(topology, location)
 
