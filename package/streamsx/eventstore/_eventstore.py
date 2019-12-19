@@ -69,7 +69,7 @@ def download_toolkit(url=None, target_dir=None):
 
 
 def get_certificate(service_configuration, name='EventStore-1'):
-    """Retrieve keystore and truststore file location for Event Store service in ICP4D.
+    """Retrieve keystore and truststore file location for Event Store service in Cloud Pak for Data.
 
     Example::
 
@@ -85,7 +85,7 @@ def get_certificate(service_configuration, name='EventStore-1'):
     Returns:
         truststore, keystore
 
-    .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. warning:: The function can be used only in IBM Cloud Pak for Data v2.1
     .. versionadded:: 2.3
     """
     
@@ -120,7 +120,7 @@ def get_certificate(service_configuration, name='EventStore-1'):
 
 
 def get_service_details(service_configuration, name='EventStore-1'):
-    """Retrieve connection information for Event Store service in ICP4D.
+    """Retrieve connection information for Event Store service in Cloud Pak for Data.
 
     Example for retrieving Event Store service details::
 
@@ -136,7 +136,7 @@ def get_service_details(service_configuration, name='EventStore-1'):
     Returns:
         database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
 
-    .. warning:: The function can be used only in IBM Cloud Pak for Data
+    .. warning:: The function can be used only in IBM Cloud Pak for Data v2.1
     .. versionadded:: 2.1
     """
     
@@ -349,6 +349,7 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
     Returns:
         Output Stream.
 
+    .. note:: This function requires an outgoing Internet connection to download the driver if jdbc_driver_lib is not specified
     .. versionadded:: 2.4
     """
     
