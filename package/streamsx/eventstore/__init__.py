@@ -10,6 +10,8 @@ Provides a function to insert IBM Streams tuple data into a table in `IBM Db2 Ev
 
 IBM Db2 Event Store is an in-memory database designed to rapidly ingest and analyze streamed data in event-driven applications. It provides the fabric for fast data with its ability to process massive volume of events in real-time, coupled with optimization for streamed data performance for advanced analytics and actionable insights.
 
+This package exposes SPL operators in the `com.ibm.streamsx.eventstore <https://github.com/IBMStreams/streamsx.eventstore/>`_ toolkit and `com.ibm.streamsx.jdbc <https://github.com/IBMStreams/streamsx.jdbc/>`_ toolkit as Python methods.
+
 Sample
 ++++++
 
@@ -41,7 +43,7 @@ a table in a Db2 Event Store database::
 
 """
 
-__version__='2.5.1'
+__version__='2.6.0'
 
-__all__ = ['insert', 'configure_connection', 'download_toolkit', 'get_service_details', 'get_certificate', 'run_statement']
-from streamsx.eventstore._eventstore import insert,configure_connection,download_toolkit,get_service_details,get_certificate,run_statement
+__all__ = ['insert', 'configure_connection', 'download_toolkit', 'run_statement']
+from streamsx.eventstore._eventstore import insert,configure_connection,download_toolkit,run_statement
