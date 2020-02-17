@@ -5,7 +5,7 @@ setup(
   packages = ['streamsx.eventstore'],
   include_package_data=True,
   version = streamsx.eventstore.__version__,
-  description = 'IBM Streams Event Store integration',
+  description = 'Event Store integration for IBM Streams',
   long_description = open('DESC.txt').read(),
   author = 'IBM Streams @ github.com',
   author_email = 'hegermar@de.ibm.com',

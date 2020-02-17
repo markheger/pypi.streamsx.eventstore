@@ -68,136 +68,6 @@ def download_toolkit(url=None, target_dir=None):
     return _toolkit_location
 
 
-def get_certificate(service_configuration, name='EventStore-1'):
-    """Retrieve keystore and truststore file location for Event Store service in Cloud Pak for Data.
-
-    Example::
-
-        from icpd_core import icpd_util
-        
-        eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
-        es_truststore, es_keystore = get_certificate(eventstore_cfg, name='your-eventstore-instance')
-
-    Args:
-        service_configuration(dict): Event Store service instance details.
-        name(str): Name of the Event Store instance
-
-    Returns:
-        truststore, keystore
-
-    .. warning:: The function can be used only in IBM Cloud Pak for Data v2.1
-    .. versionadded:: 2.3
-    """
-    
-    eventstore_cfg = service_configuration 
-    token = eventstore_cfg['user_token']
-    jdbc_url = eventstore_cfg['connection_info']['jdbc']
-    p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
-    m = re.search(p,jdbc_url)
-    host = m.group('host')
-    #print(host)
-
-    details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
-    r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
-    if r.status_code==200:
-        sr = r.json()
-        es_db=sr['requestObj']['CreateArguments']['metadata']['database-name']
-        for x in sr['requestObj']['CreateArguments']['metadata']['connectivity-url']:
-            if 'scala' in x['id']:
-                es_connection = x['url']
-                break
-        instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
-        clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
-        es_truststore = clientkeystore
-        es_keystore = clientkeystore
-
-    else:
-        clientkeystore=input("Event Store certificate:")
-        es_keystore=clientkeystore
-        es_keystore=es_truststore
-
-    return es_truststore, es_keystore
-
-
-def get_service_details(service_configuration, name='EventStore-1'):
-    """Retrieve connection information for Event Store service in Cloud Pak for Data.
-
-    Example for retrieving Event Store service details::
-
-        from icpd_core import icpd_util
-        
-        eventstore_cfg=icpd_util.get_service_instance_details(name='your-eventstore-instance')
-        es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password = get_service_details(eventstore_cfg, name='your-eventstore-instance')
-
-    Args:
-        service_configuration(dict): Event Store service instance details.
-        name(str): Name of the Event Store instance
-
-    Returns:
-        database_name, connection, user, password, truststore, truststore_password, keystore, keystore_password
-
-    .. warning:: The function can be used only in IBM Cloud Pak for Data v2.1
-    .. versionadded:: 2.1
-    """
-    
-    eventstore_cfg = service_configuration
-    if eventstore_cfg is None:
-        raise ValueError("Invalid service_configuration")
-    token = eventstore_cfg['user_token']
-    jdbc_url = eventstore_cfg['connection_info']['jdbc']
-    p = '(?:jdbc:db2.*://)?(?P<host>[^:/ ]+).?(?P<port>[0-9]*).*'
-    m = re.search(p,jdbc_url)
-    host = m.group('host')
-    port = m.group('port')
-    #print(host)
-    jdbc_conn=host+':'+port
-
-    details_url = up.urlunsplit(('https', host + ':31843', 'zen-data/v2/serviceInstance/details', 'displayName=' + name, None))
-    r = requests.get(details_url, headers={"Authorization": "Bearer " + token}, verify=False)
-    if r.status_code==200:
-        sr = r.json()
-        es_db=sr['requestObj']['CreateArguments']['metadata']['database-name']
-        for x in sr['requestObj']['CreateArguments']['metadata']['connectivity-url']:
-            if 'scala' in x['id']:
-                es_connection = x['url']
-                break
-
-        if ';' not in es_connection:
-            es_connection = jdbc_conn + ';' + es_connection
-
-        instance_id=sr['requestObj']['CreateArguments']['metadata']['instance-id']
-        es_user=sr['requestObj']['CreateArguments']['metadata']['credentials']['user']
-        password=sr['requestObj']['CreateArguments']['metadata']['credentials']['password']
-        es_password=getpass.getpass('Event Store password for user '+es_user+':')
-
-        clientkeystore = '/user-home/_global_/eventstore/'+instance_id+'/clientkeystore'
-        es_truststore = clientkeystore
-        es_keystore = clientkeystore
-
-        session=requests.session()
-        requests.packages.urllib3.disable_warnings()
-        rest_url = 'https://' + host + ':31843/icp4data-databases/'+instance_id+'/zen/com/ibm/event/api/v1/oltp/certificate_password'
-        response = session.get(rest_url, headers={"Authorization": "Bearer " + token}, verify=False)
-        if response.status_code==200:
-            es_truststore_password=response.text
-            es_keystore_password=es_truststore_password
-        else:
-            es_truststore_password=getpass.getpass("Event Store truststore password:")
-            es_keystore_password=es_truststore_password
-    else:
-        es_db=input("Event Store database name (for example EVENTDB):")
-        es_connection=input("Event Store connection (for example '<HOST1>:<JDBC_PORT>;<HOST1>:1101,<HOST2>:1101,<HOST3>:1101':")
-        es_user=input("Event Store user:")
-        es_password=getpass.getpass('Event Store password for user '+es_user+':')
-        es_truststore_password=getpass.getpass("Event Store truststore password:")
-        es_keystore_password=es_truststore_password
-        clientkeystore=input("Event Store certificate:")
-        es_truststore = clientkeystore
-        es_keystore = clientkeystore
-
-    return es_db, es_connection, es_user, es_password, es_truststore, es_truststore_password, es_keystore, es_keystore_password
-
-
 def configure_connection(instance, name='eventstore', database=None, connection=None, user=None, password=None, keystore_password=None, truststore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None):
     """Configures IBM Streams for a connection to IBM Db2 Event Store database.
 
@@ -325,7 +195,7 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
     
 
     Args:
-        stream(Stream): Stream of tuples containing the SQL statements or SQL statement parameter values. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) or ``CommonSchema.String``  as input.
+        stream(streamsx.topology.topology.Stream): Stream of tuples containing the SQL statements or SQL statement parameter values. Supports :py:class:`topology_ref:streamsx.topology.schema.StreamSchema` (schema for a structured stream) or ``CommonSchema.String`` as input.
         credentials(dict|str): The credentials of the IBM cloud DB2 warehouse service in JSON or the name of the application configuration.
         truststore(str): Path to the trust store file for the SSL connection.
         keystore(str): Path to the key store file for the SSL connection.
@@ -347,7 +217,7 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
         name(str): Sink name in the Streams context, defaults to a generated name.
 
     Returns:
-        Output Stream.
+        :py:class:`topology_ref:streamsx.topology.topology.Stream`: Result stream.
 
     .. note:: This function requires an outgoing Internet connection to download the driver if jdbc_driver_lib is not specified
     .. versionadded:: 2.4
@@ -398,27 +268,27 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id', partitioning_key='id')
 
     Args:
-        stream(Stream): Stream of tuples containing the fields to be inserted as a row. Supports ``streamsx.topology.schema.StreamSchema`` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
+        stream(streamsx.topology.topology.Stream): Stream of tuples containing the fields to be inserted as a row. Supports :py:class:`topology_ref:streamsx.topology.schema.StreamSchema` (schema for a structured stream) as input. The tuple attribute types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
         table(str): The name of the table into which you want to insert rows.
         schema_name(str): The name of the table schema name of the table into which to insert data.
-        database(str): The name of the database, as defined in IBM Db2 Event Store. Alternative this parameter can be set with function ``configure_connection()``.
-        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store. Alternative this parameter can be set with function ``configure_connection()``.
-        user(str): Name of the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function ``configure_connection()``.
-        password(str): Password for the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function ``configure_connection()``.
-        config(str): The name of the application configuration. Value returned by the function ``configure_connection()``.
+        database(str): The name of the database, as defined in IBM Db2 Event Store. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        user(str): Name of the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        password(str): Password for the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        config(str): The name of the application configuration. Value returned by the function :py:meth:`~streamsx.eventstore.configure_connection`.
         batch_size(int): The number of rows that will be batched in the operator before the batch is inserted into IBM Db2 Event Store by using the batchInsertAsync method. If you do not specify this parameter, the batchSize defaults to the estimated number of rows that could fit into an 8K memory page.
         front_end_connection_flag(bool): Set to ``True`` to connect through a Secure Gateway (for Event Store Enterprise Edition version >= 1.1.2 and Developer Edition version > 1.1.4)
         max_num_active_batches(int): The number of batches that can be filled and inserted asynchronously. The default is 1.        
         partitioning_key(str): Partitioning key for the table. A string of attribute names separated by commas. The partitioning_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
         primary_key(str): Primary key for the table.  A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the primary key for the IBM Db2 Event Store table. The primary_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
         truststore(str): Path to the trust store file for the SSL connection.
-        truststore_password(str): Password for the trust store file given by the truststore parameter. Alternative this parameter can be set with function ``configure_connection()``.
+        truststore_password(str): Password for the trust store file given by the truststore parameter. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
         keystore(str): Path to the key store file for the SSL connection.
-        keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function ``configure_connection()``.
+        keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
         plugin_name(str): The plug-in name for the SSL connection. The default value is IBMIAMauth.      
         plugin_flag(str|bool): Set "false" or ``False`` to disable SSL plugin. If not specified, the default is use plugin.
         ssl_connection(str|bool): Set "false" or ``False`` to disable SSL connection. If not specified the default is SSL enabled.
-        schema(StreamSchema): Schema for returned stream. Expects a Boolean attribute called "_Inserted_" in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
+        schema(streamsx.topology.schema.StreamSchema): Schema for returned stream. Expects a Boolean attribute called ``_Inserted_`` in the output stream. This attribute is set to true if the data was successfully inserted and false if the insert failed. Input stream attributes are forwarded to the output stream if present in schema.            
         name(str): Sink name in the Streams context, defaults to a generated name.
 
     Returns:
