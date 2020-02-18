@@ -300,6 +300,137 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
                             name=name)
 
 
+class Insert(streamsx.topology.composite.ForEach):
+    """Inserts tuple into a table using Db2 Event Store Scala API.
+
+    Important: The tuple field types and positions in the IBM Streams schema must match the field names in your IBM Db2 Event Store table schema exactly.
+
+    Creates the table if the table does not exist. Set the ``primary_key`` and ``partitioning_key`` in case the table needs to be created.
+
+    Example of a Streams application inserting rows to a table in a Db2 Event Store database::
+
+        import streamsx.eventstore as es
+
+        # generate sample tuples with the schema of the target table
+        s = topo.source([1,2,3,4,5,6,7,8,9])
+        schema=StreamSchema('tuple<int32 id, rstring name>').as_tuple()
+        s = s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
+
+        # insert tuple data into table as rows
+        s.for_each(es.Insert(config='eventstore', table='SampleTable', schema_name='sample', primary_key='id', partitioning_key='id'))
+
+    Args:
+        table(str): The name of the table into which you want to insert rows.
+        schema_name(str): The name of the table schema name of the table into which to insert data.
+        database(str): The name of the database, as defined in IBM Db2 Event Store. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        connection(str): The set of IP addresses and port numbers needed to connect to IBM Db2 Event Store. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        user(str): Name of the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        password(str): Password for the IBM Db2 Event Store User in order to connect. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        config(str): The name of the application configuration. Value returned by the function :py:meth:`~streamsx.eventstore.configure_connection`.
+        batch_size(int): The number of rows that will be batched in the operator before the batch is inserted into IBM Db2 Event Store by using the batchInsertAsync method. If you do not specify this parameter, the batchSize defaults to the estimated number of rows that could fit into an 8K memory page.
+        front_end_connection_flag(bool): Set to ``True`` to connect through a Secure Gateway (for Event Store Enterprise Edition version >= 1.1.2 and Developer Edition version > 1.1.4)
+        max_num_active_batches(int): The number of batches that can be filled and inserted asynchronously. The default is 1.        
+        partitioning_key(str): Partitioning key for the table. A string of attribute names separated by commas. The partitioning_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
+        primary_key(str): Primary key for the table.  A string of attribute names separated by commas. The order of the attribute names defines the order of entries in the primary key for the IBM Db2 Event Store table. The primary_key parameter is used only, if the table does not yet exist in the IBM Db2 Event Store database.
+        truststore(str): Path to the trust store file for the SSL connection.
+        truststore_password(str): Password for the trust store file given by the truststore parameter. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        keystore(str): Path to the key store file for the SSL connection.
+        keystore_password(str): Password for the key store file given by the keystore parameter. Alternative this parameter can be set with function :py:meth:`~streamsx.eventstore.configure_connection`.
+        plugin_name(str): The plug-in name for the SSL connection. The default value is IBMIAMauth.      
+        plugin_flag(str|bool): Set "false" or ``False`` to disable SSL plugin. If not specified, the default is use plugin.
+        ssl_connection(str|bool): Set "false" or ``False`` to disable SSL connection. If not specified the default is SSL enabled.
+
+    Returns:
+        streamsx.topology.topology.Sink: Stream termination
+
+    .. versionadded:: 2.8
+    """
+
+    def __init__(self, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None):
+        self.table = table
+        self.schema_name = schema_name
+        self.database = database
+        self.connection = connection
+        self.user = user
+        self.password = password
+        self.config = config
+        self.batch_size = batch_size
+        self.front_end_connection_flag = front_end_connection_flag
+        self.max_num_active_batches = max_num_active_batches
+        self.partitioning_key = partitioning_key
+        self.primary_key = primary_key
+        self.truststore = truststore
+        self.truststore_password = truststore_password
+        self.keystore = keystore
+        self.keystore_password = keystore_password
+        self.plugin_name = plugin_name
+        self.plugin_flag = plugin_flag
+        self.ssl_connection = ssl_connection
+
+    def populate(self, topology, stream, name, **options) -> streamsx.topology.topology.Sink:
+
+        if self.config is None and self.connection is None:
+            raise ValueError("Either config parameter or connection must be set.")
+        if self.config is None and self.database is None:
+            raise ValueError("Either config parameter or database must be set.")
+
+        # python wrapper eventstore toolkit dependency
+        _add_toolkit_dependency(topology)
+
+        _op = _EventStoreSink(stream, schema=None, connectionString=self.connection, databaseName=self.database, tableName=self.table, schemaName=self.schema_name, partitioningKey=self.partitioning_key, primaryKey=self.primary_key, name=name)
+        if self.front_end_connection_flag is not None:
+            if self.front_end_connection_flag is True:
+                _op.params['frontEndConnectionFlag'] = _op.expression('true')
+        if self.batch_size is not None:
+            _op.params['batchSize'] = streamsx.spl.types.int32(self.batch_size)
+        if self.max_num_active_batches is not None:
+            _op.params['maxNumActiveBatches'] = streamsx.spl.types.int32(self.max_num_active_batches)
+          
+        if self.keystore is not None:
+            _op.params['keyStore'] = _add_store_file(topology, self.keystore)
+        if self.keystore_password is not None:
+            _op.params['keyStorePassword'] = self.keystore_password
+        if self.plugin_name is not None:
+            _op.params['pluginName'] = self.plugin_name
+        else:
+            _op.params['pluginName'] = 'IBMIAMauth'
+        if self.plugin_flag is not None:
+            if isinstance(self.plugin_flag, (bool)):
+                if self.plugin_flag:
+                    _op.params['pluginFlag'] = _op.expression('true')
+                else:
+                    _op.params['pluginFlag'] = _op.expression('false')
+            else:
+                if 'true' in self.plugin_flag.lower():
+                    _op.params['pluginFlag'] = _op.expression('true')
+                else:
+                    _op.params['pluginFlag'] = _op.expression('false')
+        if self.ssl_connection is not None:
+            if isinstance(self.ssl_connection, (bool)):
+                if self.ssl_connection:
+                    _op.params['sslConnection'] = _op.expression('true')
+                else:
+                    _op.params['sslConnection'] = _op.expression('false')
+            else:
+                if 'true' in self.ssl_connection.lower():
+                    _op.params['sslConnection'] = _op.expression('true')
+                else:
+                    _op.params['sslConnection'] = _op.expression('false')
+        if self.truststore is not None:
+            _op.params['trustStore'] = _add_store_file(topology, self.truststore)
+        if self.truststore_password is not None:
+            _op.params['trustStorePassword'] = self.truststore_password
+
+        if self.config is not None:
+            _op.params['configObject'] = self.config
+        else:
+            if self.user is not None:
+                _op.params['eventStoreUser'] = self.user
+            if self.password is not None:
+                _op.params['eventStorePassword'] = self.password
+
+        return streamsx.topology.topology.Sink(_op)
+
 
 def insert(stream, table, schema_name=None, database=None, connection=None, user=None, password=None, config=None, batch_size=None, front_end_connection_flag=None, max_num_active_batches=None, partitioning_key=None, primary_key=None, truststore=None, truststore_password=None, keystore=None, keystore_password=None, plugin_name=None, plugin_flag=None, ssl_connection=None, schema=None, name=None):
     """Inserts tuple into a table using Db2 Event Store Scala API.
@@ -347,6 +478,9 @@ def insert(stream, table, schema_name=None, database=None, connection=None, user
         streamsx.topology.topology.Sink: Stream termination
         or
         Output Stream if ``schema`` parameter is specified. This output port is intended to output the information on whether a tuple was successful or not when it was inserted into the database.
+
+    .. deprecated:: 2.8.0
+        Use the :py:class:`~Insert`.
     """
 
     if config is None and connection is None:

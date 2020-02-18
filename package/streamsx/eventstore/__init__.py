@@ -36,14 +36,14 @@ a table in a Db2 Event Store database::
     s = s.map(lambda x : (x,'X'+str(x*2)), schema=schema)
 
     # insert tuple data into table as rows
-    res = es.insert(s, connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id', partitioning_key='id')
+    s.for_each(es.Insert(connection=es_connection, database='TESTDB', table='SampleTable', schema_name='sample', primary_key='id', partitioning_key='id', truststore=es_truststore, keystore=es_keystore))
 
     submit (ContextTypes.DISTRIBUTED, topo)
     # The Streams job is kept running.
 
 """
 
-__version__='2.7.0'
+__version__='2.8.0'
 
-__all__ = ['insert', 'configure_connection', 'download_toolkit', 'run_statement', 'SQLStatement']
-from streamsx.eventstore._eventstore import insert,configure_connection,download_toolkit,run_statement,SQLStatement
+__all__ = ['Insert', 'SQLStatement', 'configure_connection', 'download_toolkit', 'insert', 'run_statement']
+from streamsx.eventstore._eventstore import insert,configure_connection,download_toolkit,run_statement,SQLStatement,Insert
