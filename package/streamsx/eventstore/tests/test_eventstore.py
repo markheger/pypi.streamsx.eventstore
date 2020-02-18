@@ -84,7 +84,6 @@ class TestDistributed(unittest.TestCase):
         streamsx.spl.toolkit.add_toolkit(topo, self.es_toolkit)
         s = self._create_stream(topo)
         res = es.insert(s, config='eventstore', table='SampleTablePy', primary_key='id', ssl_connection=False, plugin_flag=False)      
-
         # build only
         self._build_only(name, topo)
 
@@ -96,8 +95,19 @@ class TestDistributed(unittest.TestCase):
         s = topo.source(['DROP TABLE STR_SAMPLE']).as_string()
         res_sql = s.map(es.SQLStatement(credentials='eventstore'), schema=CommonSchema.String)
         res_sql.print()
-
+        # build only
         self._build_only(name, topo)
+
+    def test_insert_composite(self):
+        print ('\n---------'+str(self))
+        name = 'test_insert_composite'
+        topo = Topology(name)
+        streamsx.spl.toolkit.add_toolkit(topo, self.es_toolkit)
+        s = self._create_stream(topo)
+        s.for_each(es.Insert(config='eventstore', table='SampleTablePy', primary_key='id', ssl_connection=False, plugin_flag=False))
+        # build only
+        self._build_only(name, topo)
+
 
 class TestDownloadToolkit(unittest.TestCase):
     @classmethod
