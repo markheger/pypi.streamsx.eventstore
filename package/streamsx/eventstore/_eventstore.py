@@ -174,12 +174,60 @@ def _get_jdbc_driver():
                 raise ValueError("Invalid JDBC driver")
 
 
-def run_statement(stream, credentials, truststore, keystore, truststore_password=None, keystore_password=None, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMIAMauth', security_mechanism=15, vm_arg=None, name=None):
-    """Runs a SQL statement using DB2 Event Store client driver and JDBC database interface.
+class SQLStatement(db.JDBCStatement):
+    """Runs a SQL statement using Db2 Event Store client driver and JDBC database interface.
 
     The statement is called once for each input tuple received. Result sets that are produced by the statement are emitted as output stream tuples.
     
-    This function includes the JDBC driver ('ibm-event_2.11-1.0.jar') for DB2 Event Store database ('COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver') in the application bundle per default.
+    This class bases :py:class:`db_ref:streamsx.database.JDBCStatement`, includes the JDBC driver ('ibm-event_2.11-1.0.jar') and sets defaults for Db2 Event Store database:
+
+    * jdbc_driver_class = 'COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver'
+    * ssl_connection = True
+    * keystore_type = 'PKCS12'
+    * truststore_type = 'PKCS12'
+    * plugin_name = 'IBMIAMauth'
+    * security_mechanism = 15
+
+    Example with "select count" statement and defined output schema with attribute ``TOTAL`` having the result of the query::
+
+        import streamsx.eventstore as es
+
+        sample_schema = StreamSchema('tuple<int32 TOTAL, rstring string>')
+        sql_query = 'SELECT COUNT(*) AS TOTAL FROM SAMPLE.TAB1'
+        query = topo.source([sql_query]).as_string()
+        res = s.map(es.SQLStatement(credentials='eventstore'), schema=sample_schema)
+        res.print()
+
+    Args:
+        credentials(dict|str): The credentials of the IBM cloud Db2 warehouse service in JSON or the name of the application configuration.
+        options (kwargs): The additional optional parameters as variable keyword arguments.
+
+    Returns:
+        :py:class:`topology_ref:streamsx.topology.topology.Stream`: Result stream.
+
+    .. note:: This function requires an outgoing Internet connection to download the driver if jdbc_driver_lib is not specified
+    .. versionadded:: 2.7
+    """
+    def __init__(self, credentials, **options):
+        jdbc_driver_lib = _get_jdbc_driver()  
+        print ('jdbc_driver_lib: '+jdbc_driver_lib)
+
+        super(SQLStatement, self).__init__(credentials, **options)
+        self.jdbc_driver_lib = jdbc_driver_lib
+        self.jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver'
+        self.ssl_connection=True
+        self.keystore_type='PKCS12'
+        self.truststore_type='PKCS12'
+        self.plugin_name='IBMIAMauth'
+        self.security_mechanism=15
+
+
+def run_statement(stream, credentials, truststore, keystore, truststore_password=None, keystore_password=None, schema=None, sql=None, sql_attribute=None, sql_params=None, transaction_size=1, jdbc_driver_class='COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver', jdbc_driver_lib=None, ssl_connection=True, keystore_type='PKCS12', truststore_type='PKCS12', plugin_name='IBMIAMauth', security_mechanism=15, vm_arg=None, name=None):
+    """Runs a SQL statement using Db2 Event Store client driver and JDBC database interface.
+
+    The statement is called once for each input tuple received. Result sets that are produced by the statement are emitted as output stream tuples.
+    
+    This function includes the JDBC driver ('ibm-event_2.11-1.0.jar') for Db2 Event Store database ('COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver') in the application bundle per default.
 
     Supports two ways to specify the statement:
 
@@ -188,15 +236,17 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
 
     Example with "select count" statement and defined output schema with attribute ``TOTAL`` having the result of the query::
 
+        import streamsx.eventstore as es
+
         sample_schema = StreamSchema('tuple<int32 TOTAL, rstring string>')
         sql_query = 'SELECT COUNT(*) AS TOTAL FROM SAMPLE.TAB1'
         query = topo.source([sql_query]).as_string()
-        res = db.run_statement(query, credentials=credentials, schema=sample_schema)
+        res = es.run_statement(query, credentials=credentials, schema=sample_schema)
     
 
     Args:
         stream(streamsx.topology.topology.Stream): Stream of tuples containing the SQL statements or SQL statement parameter values. Supports :py:class:`topology_ref:streamsx.topology.schema.StreamSchema` (schema for a structured stream) or ``CommonSchema.String`` as input.
-        credentials(dict|str): The credentials of the IBM cloud DB2 warehouse service in JSON or the name of the application configuration.
+        credentials(dict|str): The credentials of the IBM cloud Db2 warehouse service in JSON or the name of the application configuration.
         truststore(str): Path to the trust store file for the SSL connection.
         keystore(str): Path to the key store file for the SSL connection.
         truststore_password(str): Password for the trust store file given by the truststore parameter.
@@ -206,7 +256,7 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
         sql_attribute(str): Name of the input stream attribute containing the SQL statement. Use this as alternative option to ``sql`` parameter.
         sql_params(str): The values of SQL statement parameters. These values and SQL statement parameter markers are associated in lexicographic order. For example, the first parameter marker in the SQL statement is associated with the first sql_params value.
         transaction_size(int): The number of tuples to commit per transaction. The default value is 1.
-        jdbc_driver_class(str): The default driver is for DB2 Event Store database 'COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver'.
+        jdbc_driver_class(str): The default driver is for Db2 Event Store database 'COM.ibm.db2os390.sqlj.jdbc.DB2SQLJDriver'.
         jdbc_driver_lib(str): Path to the JDBC driver library file. Specify the jar filename with absolute path, containing the class given with ``jdbc_driver_class`` parameter. Per default the 'ibm-event_2.11-1.0.jar' is added to the 'opt' directory in the application bundle.
         ssl_connection(bool): Use SSL connection, default is ``True``
         keystore_type(str): Type of the key store file, default is ``PKCS12``.
@@ -221,6 +271,8 @@ def run_statement(stream, credentials, truststore, keystore, truststore_password
 
     .. note:: This function requires an outgoing Internet connection to download the driver if jdbc_driver_lib is not specified
     .. versionadded:: 2.4
+    .. deprecated:: 2.7.0
+        Use the :py:class:`~SQLStatement`.
     """
     
     jdbc_driver_lib = _get_jdbc_driver()  
