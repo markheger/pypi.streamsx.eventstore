@@ -12,7 +12,6 @@ running on IBM Cloud see:
 
 .. automodule:: streamsx.eventstore
 
-
 Indices and tables
 ==================
 

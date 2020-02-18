@@ -54,6 +54,7 @@ class TestDistributed(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.es_toolkit = os.environ['STREAMSX_EVENTSTORE_TOOLKIT']
+        self.jdbc_toolkit_home = os.environ["STREAMS_JDBC_TOOLKIT"]
 
     def setUp(self):
         Tester.setup_distributed(self)
@@ -85,6 +86,17 @@ class TestDistributed(unittest.TestCase):
         res = es.insert(s, config='eventstore', table='SampleTablePy', primary_key='id', ssl_connection=False, plugin_flag=False)      
 
         # build only
+        self._build_only(name, topo)
+
+    def test_statement(self):
+        print ('\n---------'+str(self))
+        name = 'test_statement'
+        topo = Topology(name)
+        streamsx.spl.toolkit.add_toolkit(topo, self.jdbc_toolkit_home)
+        s = topo.source(['DROP TABLE STR_SAMPLE']).as_string()
+        res_sql = s.map(es.SQLStatement(credentials='eventstore'), schema=CommonSchema.String)
+        res_sql.print()
+
         self._build_only(name, topo)
 
 class TestDownloadToolkit(unittest.TestCase):
